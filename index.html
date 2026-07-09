@@ -34,6 +34,7 @@
         <div class="sidebar-title">Agent OS AI</div>
         <div class="sidebar-subtitle">保險顧問工作台</div>
       </div>
+      <button class="sidebar-close" onclick="toggleSidebar()" aria-label="關閉選單">✕</button>
     </div>
 
     <nav class="sidebar-nav">
@@ -71,6 +72,8 @@
 
     <div class="sidebar-footer">v1.0 · 自用版 · Jackson 專屬</div>
   </aside>
+
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
   <!-- ===== MAIN ===== -->
   <main class="main">

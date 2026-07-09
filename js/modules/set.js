@@ -565,7 +565,7 @@ const SetModule = (() => {
   // SiliconFlow（siliconflow.cn）：中國服務，CORS 支援，免費額度大，香港直連唔使 VPN
   // OpenRouter（openrouter.ai）：外國服務，瀏覽器可用（CORS 支援），免費模型 20 RPM
   const LLM_PRESETS = {
-    siliconflow: { label: 'SiliconFlow', provider: 'openai', baseUrl: 'https://api.siliconflow.cn/v1',          model: 'Pro/deepseek-ai/DeepSeek-V3' },
+    siliconflow: { label: 'SiliconFlow', provider: 'openai', baseUrl: 'https://api.siliconflow.cn/v1',          model: 'Qwen/Qwen2.5-14B-Instruct' },
     openrouter:  { label: 'OpenRouter',  provider: 'openai', baseUrl: 'https://openrouter.ai/api/v1',             model: 'google/gemma-4-31b-it:free' },
     mock:        { label: '離線示範',     provider: 'mock',   baseUrl: '', model: '' }
   };

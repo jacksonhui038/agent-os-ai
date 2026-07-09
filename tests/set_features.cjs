@@ -42,9 +42,9 @@ window.navigateTo('dashboard');
 ok(doc.getElementById('page-dashboard').classList.contains('active'), 'SET：可以返去 dashboard 唔 crash');
 
 // ── 2. 一鍵切 LLM ──
-window.SetModule.quickSwitch('nvidia');
+window.SetModule.quickSwitch('siliconflow');
 let cfg = getCfg();
-ok(cfg.provider === 'openai' && /nvidia/.test(cfg.baseUrl || ''), '一鍵切：NVIDIA → openai + nvidia.com baseUrl');
+ok(cfg.provider === 'openai' && /siliconflow/.test(cfg.baseUrl || ''), '一鍵切：SiliconFlow → openai + siliconflow baseUrl');
 window.SetModule.quickSwitch('openrouter');
 cfg = getCfg();
 ok(cfg.provider === 'openai' && /openrouter/.test(cfg.baseUrl || ''), '一鍵切：OpenRouter → openai + openrouter.ai baseUrl');

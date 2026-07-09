@@ -435,7 +435,7 @@ const SetModule = (() => {
     let reply;
     // 空 key pre-check：唔直接 call API 令用家見到 401
     if (cfg.provider === 'openai' && !cfg.apiKey) {
-      reply = '⚠️ 你仲未填 API Key。\n\n請按右上角 ⚙️ 設定 → 撳「OpenRouter（免費🌟）」preset 掣 → 喺「API Key」一欄貼你嘅 key → 再撳「保存設定」後重新發送。\n\n* OpenRouter（推薦，瀏覽器用得）→ https://openrouter.ai/keys → 註冊拎 key\n* NVIDIA NIM 需要後端代理，前端直接 call 會 CORS 錯誤。';
+      reply = '⚠️ 你仲未填 API Key。\n\n請按右上角 ⚙️ 設定 → 撳「SiliconFlow」preset 掣 → 喺「API Key」一欄貼你嘅 key → 再撳「保存設定」後重新發送。\n\n* SiliconFlow 拎 key → https://cloud.siliconflow.cn 註冊 → API Keys → 新建（免費）\n* 或者撳「OpenRouter」拎外國 key → https://openrouter.ai/keys';
       conversation.push({ role: 'assistant', content: reply });
       addBotMessage(reply);
       isBotTyping = false;
@@ -529,7 +529,7 @@ const SetModule = (() => {
       html = '<div class="form-group"><label class="form-label" style="color:var(--navy)">API Base URL</label><input id="setLlmBase" class="form-input" value="' + (cfg.baseUrl || '') + '" placeholder="https://api.openai.com/v1"></div>' +
              '<div class="form-group"><label class="form-label" style="color:var(--navy)">API Key</label><input id="setLlmKey" type="password" class="form-input" value="' + (cfg.apiKey || '') + '" placeholder="sk-...（OpenAI / OpenRouter key）"></div>' +
              '<div class="form-group"><label class="form-label" style="color:var(--navy)">模型</label><input id="setLlmModel" class="form-input" value="' + (cfg.model || '') + '" placeholder="gpt-4o-mini / gemini-2.0-flash / claude-3-haiku"></div>';
-      if (hint) hint.innerHTML = '支援任何 OpenAI-compatible 外國端點（OpenRouter / NVIDIA / OpenAI / Google）。Key 只存在你瀏覽器 localStorage，唔會上傳任何 server。<br><b>🌟 推薦 OpenRouter</b>（openrouter.ai）：免費模型、瀏覽器直接用得（有 CORS）。NVIDIA NIM 需要後端代理，前端直接用會 CORS 錯誤。';
+      if (hint) hint.innerHTML = '支援任何 OpenAI-compatible 端點。Key 只存在你瀏覽器 localStorage，唔會上傳任何 server。<br><b>SiliconFlow</b>（中國，免費大額）→ cloud.siliconflow.cn<br><b>OpenRouter</b>（外國，免費模型）→ openrouter.ai';
     } else {
       if (hint) hint.innerHTML = '離線示範模式用內建模擬回覆，唔使任何設定，啟動即用。想用真 LLM 請揀上面兩個。';
     }
@@ -552,13 +552,13 @@ const SetModule = (() => {
     }
   }
 
-  // ── 一鍵切 LLM 供應商（全部外國服務，唔用中國 provider）──
-  // OpenRouter（openrouter.ai）：✅ 瀏覽器可用（CORS 支援），免費模型（:free 後綴），20 RPM
-  // NVIDIA NIM（build.nvidia.com）：⚠️ 瀏覽器/前端直接 call 唔到（冇 CORS），要經後端 server 代理先得
+  // ── 一鍵切 LLM 供應商 ──
+  // SiliconFlow（siliconflow.cn）：中國服務，CORS 支援，免費額度大，香港直連唔使 VPN
+  // OpenRouter（openrouter.ai）：外國服務，瀏覽器可用（CORS 支援），免費模型 20 RPM
   const LLM_PRESETS = {
-    openrouter:  { label: 'OpenRouter（免費🌟）', provider: 'openai', baseUrl: 'https://openrouter.ai/api/v1',       model: 'google/gemma-4-31b-it:free' },
-    nvidia:      { label: 'NVIDIA（需代理）',      provider: 'openai', baseUrl: 'https://integrate.api.nvidia.com/v1', model: 'meta/llama-4-maverick' },
-    mock:        { label: '離線示範',              provider: 'mock',   baseUrl: '', model: '' }
+    siliconflow: { label: 'SiliconFlow', provider: 'openai', baseUrl: 'https://api.siliconflow.cn/v1',          model: 'Qwen/Qwen2.5-7B-Instruct' },
+    openrouter:  { label: 'OpenRouter',  provider: 'openai', baseUrl: 'https://openrouter.ai/api/v1',             model: 'google/gemma-4-31b-it:free' },
+    mock:        { label: '離線示範',     provider: 'mock',   baseUrl: '', model: '' }
   };
   function quickSwitch(key) {
     const p = LLM_PRESETS[key];

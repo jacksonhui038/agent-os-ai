@@ -465,8 +465,17 @@ const SetModule = (() => {
         conversation.push({ role: 'assistant', content: reply });
       }
     } catch (e) {
-      // 真 LLM 呼叫失敗 → 退回 mock + 提示，唔會整崩個介面
-      reply = (mockReplies[text] || fallbackReply(text)) + '\n\n⚠️ 真 LLM 呼叫失敗（' + e.message + '），已退回離線示範回覆。';
+      // 真 LLM 呼叫失敗 → 退回 mock + 友善提示
+      const msg = e.message || '';
+      let hint = '';
+      if (msg.includes('429')) {
+        hint = '\n\n🔁 429 = 免費用量限額短暫爆滿。\n⏳ 等 1 分鐘再試，或者去 OpenRouter 設定 → 加少少 Credits（$1 已經夠用好耐）就唔會再 429。\n🔧 已經幫你轉咗 Google Gemma 4 31B，冇咁多人用，應該冇咁易爆。';
+      } else if (msg.includes('401')) {
+        hint = '\n\n🔑 API Key 無效或過期，請去供應商後台檢查。';
+      } else if (msg.includes('Failed to fetch')) {
+        hint = '\n\n🌐 連線失敗，確認網絡正常後再試。';
+      }
+      reply = (mockReplies[text] || fallbackReply(text)) + '\n\n⚠️ 真 LLM 呼叫失敗（' + msg + '），已退回離線示範回覆。' + hint;
       conversation.push({ role: 'assistant', content: reply });
     }
     removeTyping();
@@ -547,7 +556,7 @@ const SetModule = (() => {
   // OpenRouter（openrouter.ai）：✅ 瀏覽器可用（CORS 支援），免費模型（:free 後綴），20 RPM
   // NVIDIA NIM（build.nvidia.com）：⚠️ 瀏覽器/前端直接 call 唔到（冇 CORS），要經後端 server 代理先得
   const LLM_PRESETS = {
-    openrouter:  { label: 'OpenRouter（免費🌟）', provider: 'openai', baseUrl: 'https://openrouter.ai/api/v1',       model: 'meta-llama/llama-3.3-70b-instruct:free' },
+    openrouter:  { label: 'OpenRouter（免費🌟）', provider: 'openai', baseUrl: 'https://openrouter.ai/api/v1',       model: 'google/gemma-4-31b-it:free' },
     nvidia:      { label: 'NVIDIA（需代理）',      provider: 'openai', baseUrl: 'https://integrate.api.nvidia.com/v1', model: 'meta/llama-4-maverick' },
     mock:        { label: '離線示範',              provider: 'mock',   baseUrl: '', model: '' }
   };

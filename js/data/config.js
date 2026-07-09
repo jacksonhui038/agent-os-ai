@@ -18,9 +18,9 @@ const APP_CONFIG = {
   },
   // SET 智能體 LLM 後端（用家亦可在 SET ⚙️ 設定直接填，會蓋過呢度）
   // 為咗資料安全，預設用離線示範模式（mock），唔會將任何資料送出國。
-  // 想用真 AI → 喺 SET ⚙️ 設定撳「NVIDIA（免費無限）」或「OpenRouter（免費）」preset 掣，再去官網拎 key 貼落去。
-  //   NVIDIA NIM：https://build.nvidia.com → Settings → API Keys（免費無限額，40 RPM，推薦！）
-  //   OpenRouter：https://openrouter.ai/keys（有免費模型，20 RPM）
+  // 想用真 AI → 喺 SET ⚙️ 設定撳「OpenRouter（免費🌟）」或「NVIDIA」preset 掣，再去官網拎 key 貼落去。
+  //   OpenRouter（推薦）：https://openrouter.ai/keys（免費模型 Llama 3.3 70B，瀏覽器直接用得）
+  //   NVIDIA NIM：https://build.nvidia.com → Settings → API Keys（需後端代理，前端 call 會有 CORS 錯誤）
   // 全部外國服務，資料唔會經過中國伺服器。
   // provider: 'mock'（離線示範）| 'ollama'（本地，唔使 key，已棄用）| 'openai'（需 key，OpenAI-compatible）
   llm: {

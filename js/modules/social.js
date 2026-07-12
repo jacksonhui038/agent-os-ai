@@ -427,25 +427,12 @@
 
   // 預設佈局（原有邏輯）
   function renderDefaultLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
-    // 卡通主角 emoji（右下角，漫畫吸睛感，唔遮住標題）
-    if (tpl.mascot) {
-      const mascotSize = Math.round(base * 0.15);
-      const mx = W - pad;
-      const my = H - pad * 2.8;
-      ctx.save();
-      ctx.globalAlpha = 0.18;
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(mx - mascotSize * 0.45, my - mascotSize * 0.45, mascotSize * 0.75, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      ctx.font = `${mascotSize}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif`;
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'bottom';
-      ctx.fillText(tpl.mascot, mx, my);
-    }
-
     let y = pad;
+
+    // 先計算公仔會佔幾大、放右下，從而預留文字寬度
+    const mascotW = tpl.mascot ? base * 0.20 : 0;      // 公仔貼紙大概闊度
+    const textMaxW = W - pad * 2 - (tpl.mascot ? mascotW + W * 0.03 : 0);
+    const effectiveTextW = Math.max(textMaxW, W * 0.55); // 最少都要有 55% 闊度
 
     // 頂部 badge
     if (tpl.badge) {
@@ -460,11 +447,11 @@
       y = by + bh + W * 0.05;
     }
 
-    // 標題（大字）
+    // 標題（大字）—— 預留右邊公仔位
     ctx.textBaseline = 'top'; ctx.textAlign = 'left';
     ctx.fillStyle = tpl.titleColor;
     const titleFont = font(tpl.titleWeight, titleSize);
-    const lines = wrapText(ctx, data.title, titleFont, W - pad * 2, 3);
+    const lines = wrapText(ctx, data.title, titleFont, effectiveTextW, 3);
     lines.forEach((ln, i) => ctx.fillText(ln, pad, y + i * titleSize * 1.18));
     y += lines.length * titleSize * 1.18 + W * 0.03;
 
@@ -472,21 +459,22 @@
     if (data.tagline) {
       ctx.fillStyle = tpl.subColor;
       const subFont = font(600, Math.round(titleSize * 0.40));
-      const sl = wrapText(ctx, data.tagline, subFont, W - pad * 2, 2);
+      const sl = wrapText(ctx, data.tagline, subFont, effectiveTextW, 2);
       sl.forEach((ln, i) => ctx.fillText(ln, pad, y + i * titleSize * 0.5));
       y += sl.length * titleSize * 0.5 + W * 0.03;
     }
 
-    // 要點（bullet）—— 預留底部 footer 同氣泡空間，避免疊字
+    // 要點（bullet）—— 預留底部 footer 同氣泡/公仔空間
     if (data.points && data.points.length) {
       const bFont = font(600, Math.round(titleSize * 0.34));
       let by2 = y;
       const footerReserve = titleSize * 0.9;
       const bubbleReserve = tpl.bubble ? base * 0.30 : 0;
-      const maxBottom = H - pad - footerReserve - bubbleReserve;
+      const mascotReserve = tpl.mascot ? base * 0.22 : 0;
+      const maxBottom = H - pad - footerReserve - Math.max(bubbleReserve, mascotReserve);
       data.points.slice(0, 3).forEach(pt => {
         if (by2 >= maxBottom) return;
-        const bl = wrapText(ctx, pt, bFont, W - pad * 2 - W * 0.04, 2);
+        const bl = wrapText(ctx, pt, bFont, effectiveTextW - W * 0.04, 2);
         if (by2 + bl.length * titleSize * 0.4 > maxBottom) {
           ctx.font = font(500, Math.round(titleSize * 0.29));
           return;
@@ -502,8 +490,29 @@
       y = by2;
     }
 
+    // 對話氣泡（放喺右下角公仔上面，一定低過內容）
     if (tpl.bubble) drawBubble(ctx, tpl, W, H, pad, base, y);
+
+    // 卡通主角 emoji（右下角貼紙，唔遮住標題）
+    if (tpl.mascot) drawMascotSticker(ctx, tpl, W, H, pad, base);
+
     drawFooter(ctx, tpl, W, H, pad, titleSize, font);
+  }
+
+  // 右下角公仔貼紙（統一樣式：白色圓底 + 陰影）
+  function drawMascotSticker(ctx, tpl, W, H, pad, base) {
+    if (!tpl.mascot) return;
+    const size = Math.round(base * 0.13);
+    const cx = W - pad - size * 0.5;
+    const cy = H - pad - size * 0.5 - W * 0.025; // 留少少位畀 footer
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = W * 0.02;
+    ctx.fillStyle = 'rgba(255,255,255,0.96)';
+    ctx.beginPath(); ctx.arc(cx, cy, size * 0.78, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.font = `${size}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(tpl.mascot, cx, cy + size * 0.02);
   }
 
   // 深色高端大字風（Alfred 風：黑底 + 金/白字 + 城市天際線 + 真人頭像）
@@ -537,8 +546,8 @@
       if (tpl.avatar) drawAvatarPlaceholder(ctx, W, H, pad, base, font);
     }
 
-    // 文字區
-    const leftZone = hasAvatar ? W * 0.50 - pad * 0.5 : W - pad * 2;
+    // 文字區：如果有頭像位，預留右邊空間
+    const leftZone = tpl.avatar ? Math.min(W * 0.58, W - pad * 2 - base * 0.18) : W - pad * 2;
     const tx = pad;
     let y = pad + (tpl.badge ? W * 0.12 : 0);
 
@@ -584,11 +593,13 @@
     drawFooter(ctx, tpl, W, H, pad, titleSize, font);
   }
 
-  // 真人風無頭像時嘅提示圓框
+  // 真人風無頭像時嘅提示貼紙（右下角，唔遮住文字）
   function drawAvatarPlaceholder(ctx, W, H, pad, base, font) {
-    const cx = W * 0.72, cy = H * 0.5, r = base * 0.26;
+    const r = base * 0.13;
+    const cx = W - pad - r;
+    const cy = H - pad - r - W * 0.025; // 留位畀 footer
     ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
     ctx.setLineDash([W * 0.018, W * 0.018]);
     ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = W * 0.005;
@@ -598,7 +609,7 @@
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('🙂', cx, cy - r * 0.08);
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.font = font(600, W * 0.026);
+    ctx.font = font(600, W * 0.022);
     ctx.fillText('上傳你嘅相', cx, cy + r * 0.55);
     ctx.restore();
   }
@@ -944,6 +955,11 @@
       ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     });
 
+    // 文字區：如果右下有公仔，預留闊度
+    const mascotW = tpl.mascot ? base * 0.20 : 0;
+    const textMaxW = W - pad * 2 - (mascotW ? mascotW + W * 0.03 : 0);
+    const effectiveTextW = Math.max(textMaxW, W * 0.55);
+
     // badge
     if (tpl.badge) {
       ctx.font = font(700, Math.round(W * 0.032));
@@ -961,7 +977,7 @@
     ctx.textBaseline = 'top'; ctx.textAlign = 'left';
     ctx.fillStyle = tpl.titleColor;
     const titleFont = font(tpl.titleWeight, Math.round(titleSize * 0.95));
-    const lines = wrapText(ctx, data.title, titleFont, W - pad * 2, 2);
+    const lines = wrapText(ctx, data.title, titleFont, effectiveTextW, 2);
     lines.forEach((ln, i) => ctx.fillText(ln, pad, y + i * titleSize * 1.05));
     y += lines.length * titleSize * 1.05 + W * 0.025;
 
@@ -969,40 +985,34 @@
     if (data.tagline) {
       ctx.fillStyle = tpl.subColor;
       ctx.font = font(600, Math.round(titleSize * 0.38));
-      ctx.fillText(data.tagline, pad, y);
-      y += titleSize * 0.55;
+      const sl = wrapText(ctx, data.tagline, ctx.font, effectiveTextW, 2);
+      sl.forEach((ln, i) => ctx.fillText(ln, pad, y + i * titleSize * 0.5));
+      y += sl.length * titleSize * 0.5 + W * 0.02;
     }
 
-    // 大 emoji 主角（中右，白色貼紙圓底 + 陰影）
-    if (tpl.mascot) {
-      const cx = W * 0.72, cy = H * 0.55, mr = base * 0.20;
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = W * 0.025;
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath(); ctx.arc(cx, cy, mr * 1.25, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-      ctx.font = `${Math.round(mr * 2)}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(tpl.mascot, cx, cy);
-    }
-
-    // bullet 喺左下
+    // bullet 喺左邊，預留右下公仔位
     if (data.points && data.points.length) {
       ctx.textAlign = 'left'; ctx.textBaseline = 'top';
       const bFont = font(600, Math.round(titleSize * 0.34));
-      const maxW = tpl.mascot ? W * 0.52 : W - pad * 2;
+      const maxW = effectiveTextW - W * 0.04;
       let by2 = y;
+      const maxBottom = H - pad - base * 0.22; // 預留公仔
       data.points.slice(0, 3).forEach(pt => {
+        if (by2 >= maxBottom) return;
+        const bl = wrapText(ctx, pt, bFont, maxW, 2);
+        if (by2 + bl.length * titleSize * 0.4 > maxBottom) return;
         ctx.fillStyle = tpl.accent;
         ctx.beginPath();
         ctx.arc(pad + W * 0.012, by2 + titleSize * 0.34 * 0.5, W * 0.009, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = tpl.bulletColor;
-        const bl = wrapText(ctx, pt, bFont, maxW - W * 0.04, 2);
         bl.forEach((ln, i) => ctx.fillText(ln, pad + W * 0.035, by2 + i * titleSize * 0.4));
         by2 += bl.length * titleSize * 0.4 + W * 0.015;
       });
     }
+
+    // 公仔貼紙放右下角（統一樣式）
+    if (tpl.mascot) drawMascotSticker(ctx, tpl, W, H, pad, base);
 
     drawFooter(ctx, tpl, W, H, pad, titleSize, font);
   }
@@ -1110,8 +1120,13 @@
   function drawBubble(ctx, tpl, W, H, pad, base, minY) {
     const text = tpl.bubble || '';
     if (!text) return;
-    const mascotSize = Math.round(base * 0.15);
-    const my = H - pad * 2.8;                 // 公仔底部 Y
+
+    // 公仔位置（同 drawMascotSticker 一致）
+    const mascotSize = Math.round(base * 0.13);
+    const mascotCx = W - pad - mascotSize * 0.5;
+    const mascotCy = H - pad - mascotSize * 0.5 - W * 0.025;
+    const mascotTop = mascotCy - mascotSize * 0.78;
+    const bubbleBottom = mascotTop - W * 0.02; // 氣泡底部喺公仔頂部之上
 
     // 氣泡字：動態縮細以遷就空間
     let fs = Math.round(base * 0.048);
@@ -1121,13 +1136,10 @@
     let lines = wrapText(ctx, text, f, maxW, 3);
     const lh = fs * 1.28;
     let bh = lines.length * lh + W * 0.05;
-    const bubbleBottom = my - mascotSize * 0.35; // 氣泡底部留喺公仔上面
     let by = bubbleBottom - bh;
 
-    // 如果唔夠位（會遮住內容），縮細字或下移
     const contentBottom = (minY || pad) + W * 0.02;
     if (by < contentBottom) {
-      // 先試縮到 2 行
       if (lines.length > 2) {
         fs = Math.round(base * 0.040);
         f = `600 ${fs}px "PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif`;
@@ -1135,7 +1147,6 @@
         bh = lines.length * fs * 1.25 + W * 0.045;
         by = bubbleBottom - bh;
       }
-      // 再試縮字
       if (by < contentBottom) {
         fs = Math.round(base * 0.035);
         f = `600 ${fs}px "PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif`;
@@ -1143,21 +1154,17 @@
         bh = lines.length * fs * 1.25 + W * 0.04;
         by = bubbleBottom - bh;
       }
-      // 仲係唔夠就頂住 contentBottom，放喺內容下面（公仔會再低啲都冇所謂，總之唔遮字）
       if (by < contentBottom) by = contentBottom;
     }
 
-    // 頂部唔好超過系列徽章區
     if (by < pad * 1.5) by = pad * 1.5;
 
     const tw = Math.max.apply(null, lines.map(l => ctx.measureText(l).width));
     const bw = Math.min(maxW, tw) + W * 0.05;
-    const bx = W - pad - bw;                 // 靠右
+    const bx = Math.min(W - pad - bw, mascotCx - bw * 0.5); // 靠右對齊公仔
 
-    // 框：白色半透明圓角
     ctx.fillStyle = 'rgba(255,255,255,0.96)';
     roundRect(ctx, bx, by, bw, bh, W * 0.035); ctx.fill();
-    // 小三角（指向右下公仔）
     ctx.beginPath();
     ctx.moveTo(bx + bw * 0.72, by + bh);
     ctx.lineTo(bx + bw * 0.95, by + bh + W * 0.045);
@@ -1165,7 +1172,6 @@
     ctx.closePath();
     ctx.fillStyle = 'rgba(255,255,255,0.96)';
     ctx.fill();
-    // 文字
     ctx.fillStyle = '#15171c';
     ctx.font = f;
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
@@ -1352,6 +1358,7 @@
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-sm btn-primary" onclick="downloadSocialCover(this)">⬇️ 下載圖片 (PNG)</button>
           <button class="btn btn-sm btn-ghost" onclick="SocialModule.rerenderWithSelected()">🔄 換範本重出</button>
+          <button class="btn btn-sm btn-secondary" onclick="SocialModule.openInCanva()">🎨 在 Canva 繼續設計</button>
           <button class="btn btn-sm btn-secondary" id="btnPublish" onclick="SocialModule.markPublished()">✅ 我已發佈到社交平台</button>
         </div>
         <p class="cover-tip">小貼士：封面大字按小紅書爆款規律設計（高對比、易讀）。落去前可改主題字再重出；用過嘅範本同文案會自動記錄，避免重覆。按「我已發佈」後會同步到全組共享記錄。</p>
@@ -1440,6 +1447,14 @@
     // 若用戶喺歷史頁面，刷新佢
     if (document.getElementById('historyOutput') && document.getElementById('historyOutput').innerHTML) renderHistory();
     alert('已記錄！呢個主題 / 範本會寫入全組共享記錄，其他同事下次生成會見到「同事已發佈」提示。');
+  }
+
+  function openInCanva() {
+    if (!state.last) { alert('請先「一鍵生成」一張圖。'); return; }
+    const dims = ratioToDims(state.last.ratio);
+    // Canva create URL：直接開指定尺寸新設計，用戶可拖入我哋生成嘅圖同文案
+    const url = `https://www.canva.com/design?create&width=${dims.w}&height=${dims.h}`;
+    window.open(url, '_blank');
   }
 
   function rerenderWithSelected() {
@@ -1566,7 +1581,7 @@
   }
 
   window.generateSocialContent = generate;
-  window.SocialModule = { init, rerenderWithSelected, markPublished, saveRedFoxKey, saveImageGenKey, toggleAiBackground, searchTrendTemplates, applyTrend, useAiAvatar, clearAvatar, toggleSeries };
+  window.SocialModule = { init, rerenderWithSelected, markPublished, saveRedFoxKey, saveImageGenKey, toggleAiBackground, searchTrendTemplates, applyTrend, useAiAvatar, clearAvatar, toggleSeries, openInCanva };
   // 測試用內部 hook（唔影響一般用戶）
   window.SocialModule.__test = {
     renderCover,

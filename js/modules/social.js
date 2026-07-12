@@ -143,6 +143,13 @@
 
     drawDecor(ctx, tpl, W, H);
 
+    // 卡通主角 emoji（右上角大圖，漫畫吸睛感）
+    if (tpl.mascot) {
+      ctx.font = `${Math.round(base * 0.30)}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif`;
+      ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+      ctx.fillText(tpl.mascot, W - pad, pad);
+    }
+
     const font = (wt, size) => `${wt} ${Math.round(size)}px "PingFang SC","Microsoft YaHei","Heiti SC","Noto Sans CJK SC",sans-serif`;
     const pad = W * 0.07;
     const portrait = H >= W;
@@ -206,6 +213,9 @@
       y = by2;
     }
 
+    // 對話氣泡（右下角，卡通角色「說話」，吸睛）
+    if (tpl.bubble) drawBubble(ctx, tpl, W, H, pad, base);
+
     // 底部品牌（右下角，細字 + 半透明底，唔遮住內容）
     const footerH = Math.max(W * 0.045, titleSize * 0.35);
     const fx = W - pad;
@@ -254,6 +264,38 @@
       }
     }
     ctx.restore();
+  }
+
+  // 對話氣泡（卡通角色「說話」）—— 右下角，白色圓角框 + 左下小三角
+  function drawBubble(ctx, tpl, W, H, pad, base) {
+    const text = tpl.bubble || '';
+    if (!text) return;
+    const fs = Math.round(base * 0.052);
+    const f = `600 ${fs}px "PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif`;
+    ctx.font = f;
+    const maxW = W * 0.50;
+    const lines = wrapText(ctx, text, f, maxW, 3);
+    const lh = fs * 1.32;
+    const tw = Math.max.apply(null, lines.map(l => ctx.measureText(l).width));
+    const bw = Math.min(maxW, tw) + W * 0.06;
+    const bh = lines.length * lh + W * 0.05;
+    const bx = W - pad - bw;          // 靠右
+    const by = H * 0.60;              // 中下偏底，避開標題同 footer，亦避開左側要點
+    // 框
+    ctx.fillStyle = 'rgba(255,255,255,0.96)';
+    roundRect(ctx, bx, by, bw, bh, W * 0.035); ctx.fill();
+    // 小三角（指向左下，似角色在右下講嘢）
+    ctx.beginPath();
+    ctx.moveTo(bx + bw * 0.78, by + bh);
+    ctx.lineTo(bx + bw * 0.62, by + bh + W * 0.045);
+    ctx.lineTo(bx + bw * 0.90, by + bh);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,0.96)';
+    ctx.fill();
+    // 文字
+    ctx.fillStyle = '#15171c';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    lines.forEach((l, i) => ctx.fillText(l, bx + W * 0.03, by + W * 0.025 + i * lh));
   }
 
   function roundRect(ctx, x, y, w, h, r) {

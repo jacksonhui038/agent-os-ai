@@ -181,12 +181,20 @@
       y += sl.length * titleSize * 0.5 + W * 0.03;
     }
 
-    // 要點（bullet）
+    // 要點（bullet）—— 預留底部 footer 空間，避免疊字
     if (data.points && data.points.length) {
       const bFont = font(600, Math.round(titleSize * 0.34));
       let by2 = y;
+      const footerReserve = titleSize * 0.9;
+      const maxBottom = H - pad - footerReserve;
       data.points.slice(0, 3).forEach(pt => {
+        if (by2 >= maxBottom) return; // 無位就唔再畫
         const bl = wrapText(ctx, pt, bFont, W - pad * 2 - W * 0.04, 2);
+        // 如果畫完會超界，縮細啲再試一次
+        if (by2 + bl.length * titleSize * 0.4 > maxBottom) {
+          ctx.font = font(500, Math.round(titleSize * 0.29));
+          return;
+        }
         ctx.fillStyle = tpl.accent;
         ctx.beginPath();
         ctx.arc(pad + W * 0.012, by2 + titleSize * 0.34 * 0.5, W * 0.009, 0, Math.PI * 2);
@@ -198,19 +206,20 @@
       y = by2;
     }
 
-    // 底部品牌 + 分隔線
-    const fy = H - pad - titleSize * 0.3;
-    ctx.globalAlpha = 0.5;
-    ctx.strokeStyle = tpl.accent; ctx.lineWidth = W * 0.004;
-    ctx.beginPath();
-    ctx.moveTo(pad, fy - W * 0.02);
-    ctx.lineTo(W - pad, fy - W * 0.02);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = tpl.footer.color;
-    ctx.font = font(600, Math.round(W * 0.028));
-    ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-    ctx.fillText(tpl.footer.text, pad, fy);
+    // 底部品牌（右下角，細字 + 半透明底，唔遮住內容）
+    const footerH = Math.max(W * 0.045, titleSize * 0.35);
+    const fx = W - pad;
+    const fy = H - pad - footerH / 2;
+    const fText = tpl.footer.text;
+    ctx.font = font(500, Math.round(W * 0.024));
+    const fW = ctx.measureText(fText).width + W * 0.03;
+    // 統一深色半透明底 + 白色字，任何背景都睇到
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    roundRect(ctx, fx - fW, fy - footerH / 2, fW, footerH, footerH * 0.3);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+    ctx.fillText(fText, fx - W * 0.015, fy);
   }
 
   function drawDecor(ctx, tpl, W, H) {

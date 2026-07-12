@@ -1358,7 +1358,7 @@
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-sm btn-primary" onclick="downloadSocialCover(this)">⬇️ 下載圖片 (PNG)</button>
           <button class="btn btn-sm btn-ghost" onclick="SocialModule.rerenderWithSelected()">🔄 換範本重出</button>
-          <button class="btn btn-sm btn-secondary" onclick="SocialModule.openInCanva()">🎨 在 Canva 繼續設計</button>
+          <button class="btn btn-sm btn-secondary" onclick="SocialModule.openInCanva()">🎨 落載 + 開 Canva 設計（Pro）</button>
           <button class="btn btn-sm btn-secondary" id="btnPublish" onclick="SocialModule.markPublished()">✅ 我已發佈到社交平台</button>
         </div>
         <p class="cover-tip">小貼士：封面大字按小紅書爆款規律設計（高對比、易讀）。落去前可改主題字再重出；用過嘅範本同文案會自動記錄，避免重覆。按「我已發佈」後會同步到全組共享記錄。</p>
@@ -1451,10 +1451,32 @@
 
   function openInCanva() {
     if (!state.last) { alert('請先「一鍵生成」一張圖。'); return; }
+    const cv = document.getElementById('socialCanvas');
+    if (!cv) { alert('請先「一鍵生成」一張圖。'); return; }
+    // 1) 自動落載 PNG，等佢喺 Canva 拖入（用到你 Pro 會員做後續編輯）
+    const name = (state.last.title ? state.last.title : 'social').replace(/[\\/:?%*|<>"']/g, '_');
+    const a = document.createElement('a');
+    a.download = `SET_cover_${name}.png`;
+    a.href = cv.toDataURL('image/png');
+    a.click();
+    // 2) 開 Canva 去正確尺寸（空白畫布，你再拖入張 PNG）
     const dims = ratioToDims(state.last.ratio);
-    // Canva create URL：直接開指定尺寸新設計，用戶可拖入我哋生成嘅圖同文案
     const url = `https://www.canva.com/design?create&width=${dims.w}&height=${dims.h}`;
     window.open(url, '_blank');
+    // 3) 彈出 Pro 用法小貼士
+    showCanvaTip();
+  }
+
+  // Canva Pro 用法小貼士（自動消失）
+  function showCanvaTip() {
+    let tip = document.getElementById('canvaTip');
+    if (tip) tip.remove();
+    tip = document.createElement('div');
+    tip.id = 'canvaTip';
+    tip.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:440px;background:#2b2d42;color:#fff;padding:14px 18px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.35);z-index:9999;font-size:14px;line-height:1.65;';
+    tip.innerHTML = '✅ PNG 已經幫你落載！去 Canva 拖入張圖，即可用你嘅 <b>Pro</b> 會員功能：<br>🔁 <b>Magic Resize</b> — 一鍵變 IG / 小紅書 / Story 尺寸<br>🎨 <b>Brand Kit</b> — 套返你嘅字體／品牌色／logo<br>🗓️ <b>Content Planner</b> — 排程發去 IG / 小紅書';
+    document.body.appendChild(tip);
+    setTimeout(() => { if (tip && tip.parentNode) tip.parentNode.removeChild(tip); }, 9000);
   }
 
   function rerenderWithSelected() {

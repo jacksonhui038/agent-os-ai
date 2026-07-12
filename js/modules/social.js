@@ -26,7 +26,7 @@
     // 卡通範本用佢自己嘅 emoji 對白
     return {
       title: s.title,
-      tagline: tpl.mascot ? `${tpl.mascot} ${s.tagline}` : s.tagline,
+      tagline: s.tagline,
       points: s.points
     };
   }
@@ -173,11 +173,23 @@
     const titleSize = Math.round(base * (portrait ? 0.14 : 0.17));
     const font = (wt, size) => `${wt} ${Math.round(size)}px "PingFang SC","Microsoft YaHei","Heiti SC","Noto Sans CJK SC",sans-serif`;
 
-    // 卡通主角 emoji（右上角大圖，漫畫吸睛感）
+    // 卡通主角 emoji（右下角，漫畫吸睛感，唔遮住標題）
     if (tpl.mascot) {
-      ctx.font = `${Math.round(base * 0.30)}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif`;
-      ctx.textAlign = 'right'; ctx.textBaseline = 'top';
-      ctx.fillText(tpl.mascot, W - pad, pad);
+      const mascotSize = Math.round(base * 0.15);
+      const mx = W - pad;
+      const my = H - pad * 2.8;
+      // 白色半透明圓底，突出公仔
+      ctx.save();
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(mx - mascotSize * 0.45, my - mascotSize * 0.45, mascotSize * 0.75, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.font = `${mascotSize}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif`;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(tpl.mascot, mx, my);
     }
 
     let y = pad;
@@ -212,12 +224,13 @@
       y += sl.length * titleSize * 0.5 + W * 0.03;
     }
 
-    // 要點（bullet）—— 預留底部 footer 空間，避免疊字
+    // 要點（bullet）—— 預留底部 footer 同氣泡空間，避免疊字
     if (data.points && data.points.length) {
       const bFont = font(600, Math.round(titleSize * 0.34));
       let by2 = y;
       const footerReserve = titleSize * 0.9;
-      const maxBottom = H - pad - footerReserve;
+      const bubbleReserve = tpl.bubble ? base * 0.30 : 0;
+      const maxBottom = H - pad - footerReserve - bubbleReserve;
       data.points.slice(0, 3).forEach(pt => {
         if (by2 >= maxBottom) return; // 無位就唔再畫
         const bl = wrapText(ctx, pt, bFont, W - pad * 2 - W * 0.04, 2);
@@ -304,15 +317,15 @@
     const bw = Math.min(maxW, tw) + W * 0.06;
     const bh = lines.length * lh + W * 0.05;
     const bx = W - pad - bw;          // 靠右
-    const by = H * 0.60;              // 中下偏底，避開標題同 footer，亦避開左側要點
+    const by = H * 0.58;              // 中右，避開標題、左側要點同右下公仔
     // 框
     ctx.fillStyle = 'rgba(255,255,255,0.96)';
     roundRect(ctx, bx, by, bw, bh, W * 0.035); ctx.fill();
-    // 小三角（指向左下，似角色在右下講嘢）
+    // 小三角（指向右下，引導視線去右下角公仔）
     ctx.beginPath();
-    ctx.moveTo(bx + bw * 0.78, by + bh);
-    ctx.lineTo(bx + bw * 0.62, by + bh + W * 0.045);
-    ctx.lineTo(bx + bw * 0.90, by + bh);
+    ctx.moveTo(bx + bw * 0.72, by + bh);
+    ctx.lineTo(bx + bw * 0.95, by + bh + W * 0.045);
+    ctx.lineTo(bx + bw * 0.85, by + bh);
     ctx.closePath();
     ctx.fillStyle = 'rgba(255,255,255,0.96)';
     ctx.fill();

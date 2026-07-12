@@ -42,11 +42,47 @@ const CloudSync = {
         localStorage.setItem('agent_os_history', JSON.stringify(hArr));
         localStorage.setItem('agent_os_team_posts', JSON.stringify(tArr));
       } catch {}
+      // 載入用戶設定（例如 RedFox Key），實現跨裝置同步
+      await this.pullSettings();
       return true;
     } catch (e) {
       console.error('CloudSync.pullAll failed:', e);
       return false;
     }
+  },
+
+  // ---- 用戶設定（跨裝置同步）----
+  getSettings() {
+    try { return JSON.parse(localStorage.getItem('agent_os_settings') || '{}'); }
+    catch { return {}; }
+  },
+  async pullSettings() {
+    if (!this._ready()) return false;
+    await this._ensureToken();
+    try {
+      const res = await fetch(`${this._base()}/rest/v1/user_settings?id=eq.${encodeURIComponent(Auth.currentUser.id)}&select=*`, {
+        headers: this._restHeaders()
+      });
+      if (!res.ok) throw new Error('GET user_settings HTTP ' + res.status);
+      const rows = await res.json();
+      const data = (rows[0] && rows[0].data) ? rows[0].data : {};
+      localStorage.setItem('agent_os_settings', JSON.stringify(data));
+      return true;
+    } catch (e) {
+      console.error('CloudSync.pullSettings failed:', e);
+      return false;
+    }
+  },
+  async pushSetting(key, value) {
+    if (!this._ready()) return;
+    try {
+      await this._ensureToken();
+      const cur = this.getSettings();
+      cur[key] = value;
+      const row = { id: Auth.currentUser.id, data: cur, updated_at: new Date().toISOString() };
+      await this._upsert('user_settings', row);
+      localStorage.setItem('agent_os_settings', JSON.stringify(cur));
+    } catch (e) { console.error('CloudSync.pushSetting failed:', e); }
   },
 
   // 取得全組共享的 team_posts（所有 authenticated user 可讀）

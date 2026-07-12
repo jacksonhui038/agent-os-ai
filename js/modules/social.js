@@ -10,12 +10,23 @@
   };
 
   // RedFox API 設定（前端用戶自填，唔 hardcode 入 repo）
+  // 儲存優先落雲端（user_settings 表），換裝置 login 都會載返；localStorage 只作 fallback
   const REDFOX_BASE = 'https://redfox.hk/story/api';
   function getRedFoxKey() {
-    try { return localStorage.getItem('agent_os_redfox_key') || ''; } catch { return ''; }
+    // 1) 雲端同步落 local 嘅設定（主）
+    let k = '';
+    try { k = Storage.getSetting('redfoxKey') || ''; } catch {}
+    if (k) return k;
+    // 2) 舊 localStorage 兼容（升級前用過嘅）
+    try { k = localStorage.getItem('agent_os_redfox_key') || ''; } catch {}
+    return k;
   }
   function setRedFoxKey(key) {
+    // 寫本地快取
+    try { Storage.setSetting('redfoxKey', key || ''); } catch {}
     try { localStorage.setItem('agent_os_redfox_key', key || ''); } catch {}
+    // 同步雲端（換裝置都有）
+    if (typeof CloudSync !== 'undefined') CloudSync.pushSetting('redfoxKey', key || '');
   }
 
   function init() {
@@ -35,6 +46,18 @@
     });
     buildGallery();
     renderRedFoxSetting();
+    migrateLegacyKey();
+  }
+
+  // 升級兼容：將舊 localStorage 個 key 喺雲端就緒時自動遷移去 user_settings（換裝置都有）
+  function migrateLegacyKey() {
+    try {
+      const legacy = localStorage.getItem('agent_os_redfox_key') || '';
+      const cloudOk = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.cloudEnabled) && (typeof Auth !== 'undefined' && Auth.isLoggedIn);
+      if (legacy && !Storage.getSetting('redfoxKey') && cloudOk) {
+        setRedFoxKey(legacy);
+      }
+    } catch {}
   }
 
   function renderRedFoxSetting() {
@@ -46,7 +69,7 @@
         <input type="password" class="form-input" id="redfoxKeyInput" placeholder="ak_xxxxxxxx" value="${escapeHtml(getRedFoxKey())}" style="flex:1">
         <button class="btn btn-sm btn-secondary" onclick="SocialModule.saveRedFoxKey()">儲存</button>
       </div>
-      <p class="cover-tip">如未填寫，「即時搜範本」會用免費 Web 趨勢結果代替。Key 只會存喺你部機／瀏覽器，唔會上傳伺服器。</p>
+      <p class="cover-tip">如未填寫，「即時搜範本」會用免費 Web 趨勢結果代替。Key 會同步去雲端（你嘅 user 設定），換 phone／換 browser 登入後都會自動載返，唔會冇咗。</p>
     `;
   }
 
@@ -54,7 +77,7 @@
     const el = document.getElementById('redfoxKeyInput');
     if (!el) return;
     setRedFoxKey(el.value.trim());
-    alert('RedFox API Key 已儲存（只存本地）。');
+    alert('RedFox API Key 已儲存，並同步去雲端（換裝置登入都會有）。');
   }
 
   // ===== 範本畫廊 =====

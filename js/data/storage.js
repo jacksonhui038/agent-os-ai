@@ -81,6 +81,17 @@ const Storage = {
   getTeamPosts() { return this.get('team_posts', []); },
   setTeamPosts(arr) { this.set('team_posts', arr); },
 
+  // 用戶設定（跨裝置雲端同步；local 快取）
+  getSetting(key, def = null) {
+    const o = this.get('settings', {});
+    return (o && key in o) ? o[key] : def;
+  },
+  setSetting(key, val) {
+    const o = this.get('settings', {});
+    o[key] = val;
+    this.set('settings', o);
+  },
+
   // 統計數字
   getStats() {
     return {

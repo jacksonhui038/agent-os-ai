@@ -68,6 +68,23 @@ create index if not exists team_posts_owner_idx on public.team_posts (owner);
 create index if not exists team_posts_data_topic_idx on public.team_posts ((data->>'topic'));
 
 -- ============================================================
+-- 6. user_settings 表（每個用戶自己嘅設定，例如 RedFox API Key）
+--    跨裝置同步：換 phone / 換 browser 登入後都會自動載返。
+-- ============================================================
+create table if not exists public.user_settings (
+  id          uuid primary key references auth.users (id) on delete cascade,
+  data        jsonb not null default '{}'::jsonb,
+  updated_at  timestamptz not null default now()
+);
+
+alter table public.user_settings enable row level security;
+
+-- 每位用戶只可以睇/改自己嘅設定
+drop policy if exists "user_settings_owner_all" on public.user_settings;
+create policy "user_settings_owner_all" on public.user_settings
+  for all using (id = auth.uid()) with check (id = auth.uid());
+
+-- ============================================================
 -- 完成！之後喺 config.js 填 Project URL + anon key 就可用。
 -- 同事用 email + 密碼註冊/登入，資料自動隔離同雲端同步。
 -- ============================================================

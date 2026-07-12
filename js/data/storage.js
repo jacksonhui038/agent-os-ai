@@ -59,10 +59,27 @@ const Storage = {
     this.set('history', h);
     if (typeof CloudSync !== 'undefined') CloudSync.pushHistory(entry);
   },
+  confirmPublished(historyId) {
+    const h = this.getHistory().map(e => {
+      if (e.id !== historyId) return e;
+      e.published = true;
+      e.publishedAt = new Date().toISOString();
+      return e;
+    });
+    this.set('history', h);
+    // 同步一筆到全組共享表
+    const entry = h.find(e => e.id === historyId);
+    if (entry && typeof CloudSync !== 'undefined') CloudSync.pushTeamPost(entry);
+    return entry;
+  },
   clearHistory() {
     this.set('history', []);
     if (typeof CloudSync !== 'undefined') CloudSync.clearHistory();
   },
+
+  // 全組共享「已發佈」記錄
+  getTeamPosts() { return this.get('team_posts', []); },
+  setTeamPosts(arr) { this.set('team_posts', arr); },
 
   // 統計數字
   getStats() {

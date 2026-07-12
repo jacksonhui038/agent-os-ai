@@ -28,22 +28,35 @@ const CloudSync = {
     await this._ensureToken();
     const uid = Auth.currentUser.id;
     try {
-      const [clients, history] = await Promise.all([
+      const [clients, history, teamPosts] = await Promise.all([
         this._get('clients', uid),
-        this._get('history', uid)
+        this._get('history', uid),
+        this._getTeamPosts()
       ]);
       // 重建 local 陣列（雲端為主，覆蓋 local）
       const cArr = (clients || []).map(r => r.data);
       const hArr = (history || []).map(r => r.data);
+      const tArr = (teamPosts || []).map(r => r.data);
       try {
         localStorage.setItem('agent_os_clients', JSON.stringify(cArr));
         localStorage.setItem('agent_os_history', JSON.stringify(hArr));
+        localStorage.setItem('agent_os_team_posts', JSON.stringify(tArr));
       } catch {}
       return true;
     } catch (e) {
       console.error('CloudSync.pullAll failed:', e);
       return false;
     }
+  },
+
+  // 取得全組共享的 team_posts（所有 authenticated user 可讀）
+  async _getTeamPosts() {
+    await this._ensureToken();
+    const res = await fetch(`${this._base()}/rest/v1/team_posts?select=*`, {
+      headers: this._restHeaders()
+    });
+    if (!res.ok) throw new Error('GET team_posts HTTP ' + res.status);
+    return res.json();
   },
 
   async _get(table, uid) {
@@ -74,9 +87,23 @@ const CloudSync = {
     const row = { id: e.id, owner: Auth.currentUser.id, data: e };
     this._insert('history', row).catch(err => console.error('pushHistory failed:', err));
   },
+  async pushTeamPost(e) {
+    if (!this._ready()) return;
+    const row = {
+      id: e.id,
+      owner: Auth.currentUser.id,
+      user_email: Auth.currentUser.email || '',
+      data: e
+    };
+    this._insert('team_posts', row).catch(err => console.error('pushTeamPost failed:', err));
+  },
   async clearHistory() {
     if (!this._ready()) return;
     this._deleteAll('history').catch(e => console.error('clearHistory cloud failed:', e));
+  },
+  async clearTeamPosts() {
+    if (!this._ready()) return;
+    this._deleteAll('team_posts').catch(e => console.error('clearTeamPosts cloud failed:', e));
   },
 
   async _upsert(table, row) {

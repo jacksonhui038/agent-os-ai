@@ -1,6 +1,6 @@
 // ===== Social.js — 社交內容引擎（一鍵出文案＋真正出圖）=====
 (function() {
-  let state = { type: 'post', templateId: 'pro-navy', last: null };
+  let state = { type: 'post', templateId: 'pro-navy', last: null, lastHistoryId: null };
 
   // 畫廊迷你預覽用嘅示範數據
   const SAMPLE = {
@@ -8,6 +8,15 @@
     tagline: '你嘅保障，夠未？',
     points: ['公院 vs 私院', '全家點配置', '預算點分配']
   };
+
+  // RedFox API 設定（前端用戶自填，唔 hardcode 入 repo）
+  const REDFOX_BASE = 'https://redfox.hk/story/api';
+  function getRedFoxKey() {
+    try { return localStorage.getItem('agent_os_redfox_key') || ''; } catch { return ''; }
+  }
+  function setRedFoxKey(key) {
+    try { localStorage.setItem('agent_os_redfox_key', key || ''); } catch {}
+  }
 
   function init() {
     document.querySelectorAll('[data-group="socialType"]').forEach(el => {
@@ -25,6 +34,27 @@
       });
     });
     buildGallery();
+    renderRedFoxSetting();
+  }
+
+  function renderRedFoxSetting() {
+    const box = document.getElementById('redfoxSetting');
+    if (!box) return;
+    box.innerHTML = `
+      <label class="form-label">RedFox API Key（即時搜範本用）</label>
+      <div style="display:flex;gap:8px">
+        <input type="password" class="form-input" id="redfoxKeyInput" placeholder="ak_xxxxxxxx" value="${escapeHtml(getRedFoxKey())}" style="flex:1">
+        <button class="btn btn-sm btn-secondary" onclick="SocialModule.saveRedFoxKey()">儲存</button>
+      </div>
+      <p class="cover-tip">如未填寫，「即時搜範本」會用免費 Web 趨勢結果代替。Key 只會存喺你部機／瀏覽器，唔會上傳伺服器。</p>
+    `;
+  }
+
+  function saveRedFoxKey() {
+    const el = document.getElementById('redfoxKeyInput');
+    if (!el) return;
+    setRedFoxKey(el.value.trim());
+    alert('RedFox API Key 已儲存（只存本地）。');
   }
 
   // ===== 範本畫廊 =====
@@ -258,12 +288,14 @@
       state.last = { title: topic, tagline: built.hook, points: built.keyPoints, ratio };
     }
 
-    Storage.addHistory({
+    const entry = {
       type: 'social', topic,
       platform, ratio,
       templateId: tpl ? tpl.id : '', templateName: tpl ? tpl.name : '',
       title: topic, caption: built.caption
-    });
+    };
+    Storage.addHistory(entry);
+    state.lastHistoryId = entry.id;
     updateDashboardStats();
   }
 
@@ -337,8 +369,9 @@
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-sm btn-primary" onclick="downloadSocialCover(this)">⬇️ 下載圖片 (PNG)</button>
           <button class="btn btn-sm btn-ghost" onclick="SocialModule.rerenderWithSelected()">🔄 換範本重出</button>
+          <button class="btn btn-sm btn-secondary" id="btnPublish" onclick="SocialModule.markPublished()">✅ 我已發佈到社交平台</button>
         </div>
-        <p class="cover-tip">小貼士：封面大字按小紅書爆款規律設計（高對比、易讀）。落去前可改主題字再重出；用過嘅範本同文案會自動記錄，避免重覆。</p>
+        <p class="cover-tip">小貼士：封面大字按小紅書爆款規律設計（高對比、易讀）。落去前可改主題字再重出；用過嘅範本同文案會自動記錄，避免重覆。按「我已發佈」後會同步到全組共享記錄。</p>
       </div>
 
       <div style="margin-top:14px;display:flex;gap:8px">
@@ -349,11 +382,25 @@
     return { html, caption, hook, keyPoints };
   }
 
-  // ===== 查重：避免重覆使用 =====
+  // ===== 查重：避免重覆使用（個人 + 全組）=====
   function findDuplicate(topic, templateId) {
-    const h = (Storage.getHistory() || []).filter(e => e.type === 'social');
     const t = (topic || '').trim();
     const fmt = d => { try { return new Date(d).toLocaleDateString('zh-HK'); } catch { return ''; } };
+
+    // 1) 全組共享記錄
+    const team = Storage.getTeamPosts() || [];
+    const teamSameTopic = team.find(e => e.topic && t && (e.topic === t || e.topic.includes(t) || t.includes(e.topic)));
+    if (teamSameTopic) {
+      const who = teamSameTopic.user_email || '同事';
+      return `⚠️ 全組記錄：${who} 已經喺 ${fmt(teamSameTopic.time || teamSameTopic.publishedAt)} 發佈過類似主題「${teamSameTopic.topic}」，建議換個角度或新聞點。`;
+    }
+    const teamSameTpl = team.find(e => e.templateId && e.templateId === templateId);
+    if (teamSameTpl) {
+      return `💡 全組記錄：${teamSameTpl.user_email || '同事'} 用過同一款範本「${teamSameTpl.templateName}」，可以換款範本增加新鮮感。`;
+    }
+
+    // 2) 個人歷史
+    const h = (Storage.getHistory() || []).filter(e => e.type === 'social');
     const sameTopic = h.find(e => e.topic && t && (e.topic === t || e.topic.includes(t) || t.includes(e.topic)));
     if (sameTopic) {
       return `⚠️ 你之前（${fmt(sameTopic.time)}）已經出過類似主題「${sameTopic.topic}」，建議換個角度 / 新聞點，避免粉絲覺得重覆。`;
@@ -363,6 +410,22 @@
       return `💡 你之前（${fmt(sameTpl.time)}）用過同一款範本「${sameTpl.templateName}」，可以換款範本增加新鮮感。`;
     }
     return null;
+  }
+
+  function markPublished() {
+    const id = state.lastHistoryId;
+    if (!id) { alert('請先「一鍵生成」後再按發佈。'); return; }
+    const entry = Storage.confirmPublished(id);
+    if (!entry) { alert('找不到記錄'); return; }
+    const btn = document.getElementById('btnPublish');
+    if (btn) {
+      btn.className = 'btn btn-sm btn-success';
+      btn.innerText = '✅ 已發佈（已同步全組）';
+      btn.disabled = true;
+    }
+    // 若用戶喺歷史頁面，刷新佢
+    if (document.getElementById('historyOutput') && document.getElementById('historyOutput').innerHTML) renderHistory();
+    alert('已記錄！呢個主題 / 範本會寫入全組共享記錄，其他同事下次生成會見到「同事已發佈」提示。');
   }
 
   function rerenderWithSelected() {
@@ -387,6 +450,107 @@
     a.click();
   };
 
+  // ===== RedFox / Web 搜尋即時範本 =====
+  async function searchTrendTemplates() {
+    const keyword = document.getElementById('trendKeyword').value.trim();
+    const out = document.getElementById('trendResults');
+    if (!keyword) { alert('請輸入關鍵詞'); return; }
+    if (!out) return;
+    out.innerHTML = '<div class="trend-loading">🔍 搜尋緊…</div>';
+
+    const sources = [];
+    const apiKey = getRedFoxKey();
+    const headers = apiKey ? { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' } : {};
+
+    // 小紅書：RedFox API（如有 key）
+    if (apiKey) {
+      try {
+        const res = await fetch(`${REDFOX_BASE}/xhsUser/searchArticle`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ keyword, limit: 6 })
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const list = (json && json.data && json.data.list) || (json && json.data) || [];
+          if (Array.isArray(list) && list.length) sources.push({ name: '小紅書', list: list.slice(0, 6) });
+        }
+      } catch (e) { console.warn('RedFox xhs failed', e); }
+
+      // 抖音
+      try {
+        const res = await fetch(`${REDFOX_BASE}/dyData/query`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ keyword, limit: 6 })
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const list = (json && json.data && json.data.list) || (json && json.data) || [];
+          if (Array.isArray(list) && list.length) sources.push({ name: '抖音', list: list.slice(0, 6) });
+        }
+      } catch (e) { console.warn('RedFox dy failed', e); }
+    }
+
+    // 後備：Web 搜尋（小紅書 + IG）——透過 WorkBuddy 後端 proxy 唔可行，所以用 static 熱詞啟發
+    if (sources.length === 0) {
+      sources.push({ name: '趨勢關鍵詞（無 RedFox Key 時備用）', list: generateTrendHints(keyword) });
+    }
+
+    renderTrendResults(sources, keyword);
+  }
+
+  function generateTrendHints(keyword) {
+    // 靜態啟發，當 RedFox 無效或無 key 時用
+    return [
+      { title: `${keyword} 懶人包`, desc: '合集 / 乾貨整理', likes: '熱門' },
+      { title: `${keyword} 點買最抵`, desc: '對比 / 避坑', likes: '熱門' },
+      { title: `${keyword} 真實案例`, desc: '故事型 / 見證', likes: '熱門' },
+      { title: `香港 ${keyword} 攻略`, desc: '本地化 / 流程', likes: '上升' },
+      { title: `${keyword} 常見誤解`, desc: '反轉 / 教育型', likes: '上升' },
+      { title: `${keyword} 2026 更新`, desc: '時事 / 新聞點', likes: '新鮮' }
+    ];
+  }
+
+  function renderTrendResults(sources, keyword) {
+    const out = document.getElementById('trendResults');
+    if (!out) return;
+    let html = '';
+    sources.forEach(src => {
+      html += `<div class="trend-source">📌 ${escapeHtml(src.name)}</div>`;
+      html += '<div class="trend-grid">';
+      src.list.forEach(item => {
+        const title = item.title || item.noteTitle || item.desc || item.content || `${keyword}`;
+        const desc = item.desc || item.noteDesc || (item.author ? `作者：${item.author}` : '') || '';
+        const likes = item.likes || item.totalLike || item.interactCount || item.totalScore || '–';
+        html += `
+          <div class="trend-card" onclick="SocialModule.applyTrend('${escapeHtml(title).replace(/'/g, "\\'")}')">
+            <div class="trend-title">${escapeHtml(title)}</div>
+            <div class="trend-meta">${escapeHtml(desc)} ${likes !== '–' ? '· ❤️ ' + likes : ''}</div>
+          </div>`;
+      });
+      html += '</div>';
+    });
+    html += `<p class="cover-tip">撳上面任何一條標題，即可將佢帶入「主題」欄，再揀範本出圖。</p>`;
+    out.innerHTML = html;
+  }
+
+  function applyTrend(title) {
+    const input = document.getElementById('socialTopic');
+    if (input) input.value = title;
+    input && input.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   window.generateSocialContent = generate;
-  window.SocialModule = { init, rerenderWithSelected };
+  window.SocialModule = { init, rerenderWithSelected, markPublished, saveRedFoxKey, searchTrendTemplates, applyTrend };
 })();

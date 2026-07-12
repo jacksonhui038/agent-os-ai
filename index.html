@@ -224,6 +224,18 @@
             <input type="text" class="form-input" id="socialExtra" placeholder="例：避免硬銷語氣、CTA 使用私訊領取優惠券">
           </div>
 
+          <div class="form-group" id="redfoxSetting"></div>
+
+          <div class="form-group" style="border:1px dashed var(--border);padding:14px;border-radius:var(--radius-sm);background:#f8fafc">
+            <label class="form-label">🔍 即時搜尋爆款範本（小紅書 / 抖音 / IG）</label>
+            <div style="display:flex;gap:8px;margin-bottom:8px">
+              <input type="text" class="form-input" id="trendKeyword" placeholder="例：重疾险、百万医疗险、香港保险、家庭保障" style="flex:1">
+              <button class="btn btn-sm btn-primary" onclick="SocialModule.searchTrendTemplates()">搜尋</button>
+            </div>
+            <p class="cover-tip">有 RedFox Key 會直接查小紅書 + 抖音；冇 Key 會用趨勢關鍵詞備用。搜到標題後撳一撳即可帶入主題。</p>
+            <div id="trendResults"></div>
+          </div>
+
           <div class="form-group">
             <label class="form-label">封面範本（撳一款 → 一鍵出圖）</label>
             <div id="socialTemplateGallery" class="tpl-gallery"></div>

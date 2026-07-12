@@ -190,7 +190,10 @@ function renderHistory() {
       const tplName = entry.templateName || '-';
       const plat = entry.platform || '-';
       const snippet = (entry.caption || '').replace(/\n/g, ' ').slice(0, 42);
-      detail = `範本「${escapeHtml(tplName)}」· ${escapeHtml(plat)}`
+      const publishedBadge = entry.published
+        ? `<span class="tag tag-green" style="font-size:10px">已發佈 ✅</span>`
+        : `<button class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 6px" onclick="Storage.confirmPublished('${entry.id}');renderHistory()">標記已發佈</button>`;
+      detail = `範本「${escapeHtml(tplName)}」· ${escapeHtml(plat)} · ${publishedBadge}`
         + (snippet ? `<br><span style="opacity:.85">${escapeHtml(snippet)}…</span>` : '')
         + (isDup ? ` <span class="tag tag-orange" style="font-size:10px">重複主題</span>` : '');
     }

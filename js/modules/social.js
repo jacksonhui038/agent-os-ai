@@ -502,7 +502,7 @@
       y = by2;
     }
 
-    if (tpl.bubble) drawBubble(ctx, tpl, W, H, pad, base);
+    if (tpl.bubble) drawBubble(ctx, tpl, W, H, pad, base, y);
     drawFooter(ctx, tpl, W, H, pad, titleSize, font);
   }
 
@@ -1106,25 +1106,58 @@
     ctx.restore();
   }
 
-  // 對話氣泡（卡通角色「說話」）—— 右下角，白色圓角框 + 左下小三角
-  function drawBubble(ctx, tpl, W, H, pad, base) {
+  // 對話氣泡（卡通角色「說話」）—— 右下角公仔上方，一定唔會遮住標題/副標題/bullet
+  function drawBubble(ctx, tpl, W, H, pad, base, minY) {
     const text = tpl.bubble || '';
     if (!text) return;
-    const fs = Math.round(base * 0.052);
-    const f = `600 ${fs}px "PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif`;
+    const mascotSize = Math.round(base * 0.15);
+    const my = H - pad * 2.8;                 // 公仔底部 Y
+
+    // 氣泡字：動態縮細以遷就空間
+    let fs = Math.round(base * 0.048);
+    let f = `600 ${fs}px "PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif`;
     ctx.font = f;
-    const maxW = W * 0.50;
-    const lines = wrapText(ctx, text, f, maxW, 3);
-    const lh = fs * 1.32;
+    const maxW = W * 0.52;
+    let lines = wrapText(ctx, text, f, maxW, 3);
+    const lh = fs * 1.28;
+    let bh = lines.length * lh + W * 0.05;
+    const bubbleBottom = my - mascotSize * 0.35; // 氣泡底部留喺公仔上面
+    let by = bubbleBottom - bh;
+
+    // 如果唔夠位（會遮住內容），縮細字或下移
+    const contentBottom = (minY || pad) + W * 0.02;
+    if (by < contentBottom) {
+      // 先試縮到 2 行
+      if (lines.length > 2) {
+        fs = Math.round(base * 0.040);
+        f = `600 ${fs}px "PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif`;
+        lines = wrapText(ctx, text, f, maxW, 2);
+        bh = lines.length * fs * 1.25 + W * 0.045;
+        by = bubbleBottom - bh;
+      }
+      // 再試縮字
+      if (by < contentBottom) {
+        fs = Math.round(base * 0.035);
+        f = `600 ${fs}px "PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif`;
+        lines = wrapText(ctx, text, f, maxW, 2);
+        bh = lines.length * fs * 1.25 + W * 0.04;
+        by = bubbleBottom - bh;
+      }
+      // 仲係唔夠就頂住 contentBottom，放喺內容下面（公仔會再低啲都冇所謂，總之唔遮字）
+      if (by < contentBottom) by = contentBottom;
+    }
+
+    // 頂部唔好超過系列徽章區
+    if (by < pad * 1.5) by = pad * 1.5;
+
     const tw = Math.max.apply(null, lines.map(l => ctx.measureText(l).width));
-    const bw = Math.min(maxW, tw) + W * 0.06;
-    const bh = lines.length * lh + W * 0.05;
-    const bx = W - pad - bw;          // 靠右
-    const by = H * 0.58;              // 中右，避開標題、左側要點同右下公仔
-    // 框
+    const bw = Math.min(maxW, tw) + W * 0.05;
+    const bx = W - pad - bw;                 // 靠右
+
+    // 框：白色半透明圓角
     ctx.fillStyle = 'rgba(255,255,255,0.96)';
     roundRect(ctx, bx, by, bw, bh, W * 0.035); ctx.fill();
-    // 小三角（指向右下，引導視線去右下角公仔）
+    // 小三角（指向右下公仔）
     ctx.beginPath();
     ctx.moveTo(bx + bw * 0.72, by + bh);
     ctx.lineTo(bx + bw * 0.95, by + bh + W * 0.045);
@@ -1134,6 +1167,7 @@
     ctx.fill();
     // 文字
     ctx.fillStyle = '#15171c';
+    ctx.font = f;
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     lines.forEach((l, i) => ctx.fillText(l, bx + W * 0.03, by + W * 0.025 + i * lh));
   }

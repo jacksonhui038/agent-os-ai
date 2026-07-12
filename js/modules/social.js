@@ -1,6 +1,10 @@
 // ===== Social.js — 社交內容引擎（一鍵出文案＋真正出圖）=====
 (function() {
   let state = { type: 'post', templateId: 'pro-navy', last: null, lastHistoryId: null };
+  // 系列模式（做 IG / 小紅書連載 set）：鎖定基底範本 + EP 編號 + 系列名
+  let seriesState = { active: false, name: '', ep: 1, templateId: 'pro-navy' };
+  // 真人／公仔頭像（用家 upload 或 AI 生成，留喺部機，唔上傳）
+  let avatarImage = null;
 
   // 畫廊迷你預覽用嘅示範數據（按分類各有特色，唔再一式一樣「醫療保障規劃」）
   function sampleFor(tpl) {
@@ -69,6 +73,10 @@
     buildGallery();
     renderRedFoxSetting();
     renderImageGenSetting();
+    renderAvatarSetting();
+    renderSeriesPanel();
+    loadSeries();
+    loadAvatarFromSession();
     migrateLegacyKey();
   }
 
@@ -165,6 +173,120 @@
 
   function toggleAiBackground(cb) {
     setUseAiBackground(cb && cb.checked);
+  }
+
+  // ===== 真人／公仔頭像（upload 即時用，唔使 key）=====
+  function renderAvatarSetting() {
+    const box = document.getElementById('avatarSetting');
+    if (!box) return;
+    box.innerHTML = `
+      <label class="form-label">🧑‍💼 真人／公仔頭像（用於「真人風」範本，即刻用唔使 key）</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="file" id="avatarUpload" accept="image/*" class="form-input" style="flex:1;min-width:160px">
+        <button class="btn btn-sm btn-secondary" onclick="SocialModule.useAiAvatar()">🤖 AI 頭像</button>
+        <button class="btn btn-sm btn-ghost" onclick="SocialModule.clearAvatar()">清除</button>
+      </div>
+      <p class="cover-tip">上傳你嘅相（或半身照），揀「真人風」範本（Alfred 風 / 型格真人 / 親和真人）就會自動疊上大字，似 Alfred 嗰種「真人 + 大字」。相只會留喺你部機（sessionStorage），唔會上傳去任何人。</p>
+    `;
+    const up = document.getElementById('avatarUpload');
+    if (up) up.addEventListener('change', handleAvatarUpload);
+  }
+
+  function handleAvatarUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => { avatarImage = img; try { sessionStorage.setItem('agent_os_avatar', reader.result); } catch {} rerenderIfLast(); };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function loadAvatarFromSession() {
+    try {
+      const d = sessionStorage.getItem('agent_os_avatar');
+      if (!d) return;
+      const img = new Image();
+      img.onload = () => { avatarImage = img; };
+      img.src = d;
+    } catch {}
+  }
+
+  function clearAvatar() {
+    avatarImage = null;
+    try { sessionStorage.removeItem('agent_os_avatar'); } catch {}
+    const up = document.getElementById('avatarUpload'); if (up) up.value = '';
+    rerenderIfLast();
+  }
+
+  async function useAiAvatar() {
+    const key = getImageGenKey();
+    if (!key) { alert('請先喺上方填寫 AI 圖片 API Key，先用「🤖 AI 頭像」生成 3D 風頭像。'); return; }
+    try {
+      const url = await generateAiImage('a professional 3D rendered avatar of a friendly Hong Kong male insurance advisor, studio lighting, plain dark background, no text, cinematic, high detail');
+      avatarImage = await loadImage(url);
+      try { sessionStorage.setItem('agent_os_avatar', url); } catch {}
+      rerenderIfLast();
+      alert('AI 頭像已生成！揀「真人風」範本即可疊上大字。');
+    } catch (e) { alert('AI 頭像生成失敗：' + e.message); }
+  }
+
+  function rerenderIfLast() {
+    if (state.last && document.getElementById('socialCanvas')) rerenderWithSelected();
+  }
+
+  // ===== 系列模式（IG / 小紅書連載 set）=====
+  function renderSeriesPanel() {
+    const box = document.getElementById('seriesPanel');
+    if (!box) return;
+    const opts = (typeof COVER_TEMPLATES !== 'undefined' ? COVER_TEMPLATES : [])
+      .map(t => `<option value="${t.id}" ${t.id === seriesState.templateId ? 'selected' : ''}>${escapeHtml(t.cat)} · ${escapeHtml(t.name)}</option>`).join('');
+    box.innerHTML = `
+      <label class="form-label">🎬 系列模式（做 IG / 小紅書連載 set，成組圖視覺一致）</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <input type="text" id="seriesName" placeholder="系列名稱，例：每周危疾教室" class="form-input" style="flex:1;min-width:150px" value="${escapeHtml(seriesState.name)}">
+        <select id="seriesBase" class="form-input" style="width:auto;min-width:150px">${opts}</select>
+        <input type="number" id="seriesEp" value="${seriesState.ep}" min="1" class="form-input" style="width:72px" title="起始 EP 編號">
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-bottom:6px">
+        <input type="checkbox" id="seriesActive" ${seriesState.active ? 'checked' : ''} onchange="SocialModule.toggleSeries(this)"> 啟動系列（生成時自動用基底範本 + 加 EP 徽章）
+      </label>
+      <p class="cover-tip">系列會自動幫你鎖定一款風格基底，出每一張圖都加「EP.x」徽章同系列名，成組圖視覺一致。EP 編號每次生成自動 +1。</p>
+    `;
+  }
+
+  function toggleSeries(cb) {
+    seriesState.active = !!cb.checked;
+    const baseEl = document.getElementById('seriesBase');
+    const nameEl = document.getElementById('seriesName');
+    const epEl = document.getElementById('seriesEp');
+    if (baseEl) seriesState.templateId = baseEl.value;
+    if (nameEl) seriesState.name = nameEl.value.trim();
+    if (epEl) seriesState.ep = parseInt(epEl.value, 10) || 1;
+    if (seriesState.active) {
+      state.templateId = seriesState.templateId;
+      buildGallery();
+    }
+    saveSeries();
+  }
+
+  function saveSeries() {
+    try { Storage.setSetting('series', JSON.stringify(seriesState)); } catch {}
+    if (typeof CloudSync !== 'undefined') CloudSync.pushSetting('series', JSON.stringify(seriesState));
+  }
+
+  function loadSeries() {
+    try {
+      const raw = Storage.getSetting('series');
+      if (raw) { const o = JSON.parse(raw); if (o && typeof o === 'object') seriesState = Object.assign(seriesState, o); }
+    } catch {}
+    const cb = document.getElementById('seriesActive'); if (cb) cb.checked = seriesState.active;
+    const nm = document.getElementById('seriesName'); if (nm) nm.value = seriesState.name || '';
+    const bs = document.getElementById('seriesBase'); if (bs) bs.value = seriesState.templateId;
+    const ep = document.getElementById('seriesEp'); if (ep) ep.value = seriesState.ep;
+    if (seriesState.active) { state.templateId = seriesState.templateId; buildGallery(); }
   }
 
   async function generateAiImage(prompt) {
@@ -292,12 +414,15 @@
     const font = (wt, size) => `${wt} ${Math.round(size)}px "PingFang SC","Microsoft YaHei","Heiti SC","Noto Sans CJK SC",sans-serif`;
 
     // 按範本風格分派繪製
-    if (tpl.layout === 'luxury') renderLuxuryLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
+    if (tpl.layout === 'luxury' || tpl.layout === 'person') renderLuxuryLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
     else if (tpl.layout === 'infographic') renderInfographicLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
     else if (tpl.layout === 'compare') renderCompareLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
     else if (tpl.layout === 'comic') renderComicLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
     else if (tpl.layout === 'cute') renderCuteLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
     else renderDefaultLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
+
+    // 系列 EP 徽章（所有風格通用，右上角）
+    drawSeriesBadge(ctx, tpl, W, H, pad, titleSize, font);
   }
 
   // 預設佈局（原有邏輯）
@@ -381,52 +506,170 @@
     drawFooter(ctx, tpl, W, H, pad, titleSize, font);
   }
 
-  // 深色高端大字風（Alfred 風：黑底 + 金/白字 + 光斑）
+  // 深色高端大字風（Alfred 風：黑底 + 金/白字 + 城市天際線 + 真人頭像）
   function renderLuxuryLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
-    // 標題置中放大
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = tpl.titleColor;
-    const luxTitleSize = Math.round(titleSize * 1.15);
-    const titleFont = font(tpl.titleWeight, luxTitleSize);
-    const maxTitleW = W - pad * 2;
-    const lines = wrapText(ctx, data.title, titleFont, maxTitleW, 3);
-    const totalH = lines.length * luxTitleSize * 1.15;
-    let ty = H * 0.42 - totalH / 2 + luxTitleSize * 0.5;
-    lines.forEach((ln) => {
-      // 輕微外發光提升高端感
-      ctx.shadowColor = 'rgba(0,0,0,0.5)';
-      ctx.shadowBlur = W * 0.02;
-      ctx.fillText(ln, W / 2, ty);
-      ctx.shadowBlur = 0;
-      ty += luxTitleSize * 1.15;
-    });
+    const hasAvatar = !!(tpl.avatar && avatarImage && avatarImage.width);
 
-    // 副標題置中
-    if (data.tagline) {
-      ctx.fillStyle = tpl.subColor;
-      ctx.font = font(600, Math.round(luxTitleSize * 0.35));
-      ctx.fillText(data.tagline, W / 2, H * 0.42 + totalH / 2 + W * 0.04);
+    if (hasAvatar) {
+      // 右半部畫頭像（cover fit）
+      const ax = W * 0.50, aw = W * 0.50, ah = H;
+      const scale = Math.max(aw / avatarImage.width, ah / avatarImage.height);
+      const dw = avatarImage.width * scale, dh = avatarImage.height * scale;
+      const dx = ax + (aw - dw) / 2, dy = (ah - dh) / 2;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(ax, 0, aw, ah); ctx.clip();
+      ctx.drawImage(avatarImage, dx, dy, dw, dh);
+      ctx.restore();
+      // 左暗右淡遮罩，令文字位清晰
+      const mg = ctx.createLinearGradient(0, 0, ax + aw * 0.6, 0);
+      mg.addColorStop(0, 'rgba(0,0,0,0.85)'); mg.addColorStop(0.55, 'rgba(0,0,0,0.45)'); mg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = mg; ctx.fillRect(0, 0, W, H);
+      const mgR = ctx.createLinearGradient(W, 0, W * 0.55, 0);
+      mgR.addColorStop(0, 'rgba(0,0,0,0.30)'); mgR.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = mgR; ctx.fillRect(0, 0, W, H);
+      drawSkyline(ctx, W, H, tpl.accent, ax);
+    } else {
+      drawSkyline(ctx, W, H, tpl.accent);
+      drawVignette(ctx, W, H);
+      const spot = ctx.createRadialGradient(W * 0.5, H * 0.4, W * 0.04, W * 0.5, H * 0.4, W * 0.7);
+      spot.addColorStop(0, 'rgba(255,255,255,0.10)'); spot.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = spot; ctx.fillRect(0, 0, W, H);
+      if (tpl.avatar) drawAvatarPlaceholder(ctx, W, H, pad, base, font);
     }
 
-    // 底部 bullet 置中（簡潔）
+    // 文字區
+    const leftZone = hasAvatar ? W * 0.50 - pad * 0.5 : W - pad * 2;
+    const tx = pad;
+    let y = pad + (tpl.badge ? W * 0.12 : 0);
+
+    // 標題（金漸變字）
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    const luxTitleSize = Math.round(titleSize * (hasAvatar ? 1.05 : 1.15));
+    const titleFont = font(tpl.titleWeight, luxTitleSize);
+    const lines = wrapText(ctx, data.title, titleFont, leftZone, 3);
+    const goldGrad = ctx.createLinearGradient(tx, y, tx, y + lines.length * luxTitleSize * 1.15);
+    goldGrad.addColorStop(0, '#fff7d6'); goldGrad.addColorStop(0.5, tpl.subColor || '#d4af37'); goldGrad.addColorStop(1, '#b8860b');
+    lines.forEach((ln, i) => {
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = W * 0.015;
+      ctx.fillStyle = goldGrad;
+      ctx.fillText(ln, tx, y + i * luxTitleSize * 1.15);
+      ctx.restore();
+    });
+    y += lines.length * luxTitleSize * 1.15 + W * 0.02;
+
+    // 副標題
+    if (data.tagline) {
+      ctx.fillStyle = '#f5f5f5';
+      ctx.font = font(600, Math.round(luxTitleSize * 0.34));
+      const sl = wrapText(ctx, data.tagline, ctx.font, leftZone, 2);
+      sl.forEach((ln, i) => ctx.fillText(ln, tx, y + i * luxTitleSize * 0.4));
+      y += sl.length * luxTitleSize * 0.4 + W * 0.02;
+    }
+
+    // bullet
     if (data.points && data.points.length) {
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      const bFont = font(500, Math.round(titleSize * 0.32));
-      let by = H * 0.68;
+      const bFont = font(500, Math.round(titleSize * 0.30));
       data.points.slice(0, 2).forEach(pt => {
-        ctx.fillStyle = tpl.bulletColor;
-        const bl = wrapText(ctx, pt, bFont, W - pad * 2, 2);
-        bl.forEach((ln, i) => ctx.fillText(ln, W / 2, by + i * titleSize * 0.38));
-        by += bl.length * titleSize * 0.38 + W * 0.02;
+        ctx.fillStyle = tpl.accent;
+        ctx.beginPath(); ctx.arc(tx + W * 0.01, y + titleSize * 0.3 * 0.5, W * 0.008, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#e5e5e5';
+        ctx.font = bFont;
+        const bl = wrapText(ctx, pt, bFont, leftZone - W * 0.04, 2);
+        bl.forEach((ln, i) => ctx.fillText(ln, tx + W * 0.03, y + i * titleSize * 0.36));
+        y += bl.length * titleSize * 0.36 + W * 0.015;
       });
     }
 
     drawFooter(ctx, tpl, W, H, pad, titleSize, font);
   }
 
-  // 資訊圖表步驟風（數字圓圈 + 簡短文字）
+  // 真人風無頭像時嘅提示圓框
+  function drawAvatarPlaceholder(ctx, W, H, pad, base, font) {
+    const cx = W * 0.72, cy = H * 0.5, r = base * 0.26;
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.setLineDash([W * 0.018, W * 0.018]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = W * 0.005;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = `${Math.round(r * 0.95)}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('🙂', cx, cy - r * 0.08);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.font = font(600, W * 0.026);
+    ctx.fillText('上傳你嘅相', cx, cy + r * 0.55);
+    ctx.restore();
+  }
+
+  // 城市天際線剪影
+  function drawSkyline(ctx, W, H, color, fromX) {
+    const fx = fromX || 0;
+    ctx.save();
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = color;
+    const baseY = H * 0.94;
+    let seed = 99173;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    let x = fx;
+    while (x < W) {
+      const bw = W * (0.035 + rnd() * 0.06);
+      const bh = H * (0.10 + rnd() * 0.24);
+      ctx.fillRect(x, baseY - bh, bw, bh + H);
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#fff3c4';
+      for (let wy = baseY - bh + H * 0.02; wy < baseY; wy += H * 0.03) {
+        for (let wx = x + bw * 0.2; wx < x + bw * 0.85; wx += bw * 0.28) {
+          if (rnd() > 0.5) ctx.fillRect(wx, wy, W * 0.006, H * 0.012);
+        }
+      }
+      ctx.globalAlpha = 0.28; ctx.fillStyle = color;
+      x += bw + W * 0.012;
+    }
+    ctx.restore();
+  }
+
+  // 暗角
+  function drawVignette(ctx, W, H) {
+    const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.28, W / 2, H / 2, Math.max(W, H) * 0.75);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.55)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+
+  // 系列 EP 徽章（右上角）
+  function drawSeriesBadge(ctx, tpl, W, H, pad, titleSize, font) {
+    if (!seriesState.active) return;
+    const label = `EP.${seriesState.ep}`;
+    ctx.save();
+    ctx.font = font(800, Math.round(W * 0.032));
+    const tw = ctx.measureText(label).width;
+    const bh = W * 0.062, bw = tw + W * 0.05;
+    const bx = W - pad - bw, by = pad;
+    ctx.fillStyle = tpl.accent;
+    roundRect(ctx, bx, by, bw, bh, bh * 0.32); ctx.fill();
+    ctx.fillStyle = getContrastColor(tpl.accent);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, bx + W * 0.025, by + bh / 2);
+    if (seriesState.name) {
+      ctx.font = font(600, Math.round(W * 0.022));
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+      ctx.fillText(seriesState.name, W - pad, by - W * 0.012);
+    }
+    ctx.restore();
+  }
+
+  // hex → rgba
+  function hexToRgba(hex, a) {
+    const c = (hex || '#000000').replace('#', '');
+    const r = parseInt(c.substr(0, 2), 16) || 0;
+    const g = parseInt(c.substr(2, 2), 16) || 0;
+    const b = parseInt(c.substr(4, 2), 16) || 0;
+    return `rgba(${r},${g},${b},${a})`;
+  }
+
+  // 資訊圖表步驟風（連接路徑 + 編號圖標卡，參考 hkwealthylife）
   function renderInfographicLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
     let y = pad;
 
@@ -459,28 +702,54 @@
       y += titleSize * 0.55;
     }
 
-    // 步驟圓圈（最多 3 步）
+    // 步驟：連接線 + 編號圓 + emoji 圖標 + 卡片
     const steps = (data.points || []).slice(0, 3);
-    const stepH = (H - y - pad * 2.5) / Math.max(steps.length, 1);
-    const r = Math.min(W * 0.09, stepH * 0.32);
+    const icons = ['💡', '📌', '🚀', '✅', '💰', '📈', '🛡️', '📊', '🎯'];
+    const areaY = y + W * 0.02;
+    const areaH = H - areaY - pad * 2.4;
+    const stepH = areaH / Math.max(steps.length, 1);
+    const lineX = pad + W * 0.10;
+
+    // 垂直連接線
+    if (steps.length > 1) {
+      ctx.strokeStyle = tpl.accent; ctx.lineWidth = W * 0.01; ctx.globalAlpha = 0.45;
+      ctx.beginPath();
+      ctx.moveTo(lineX, areaY + stepH / 2);
+      ctx.lineTo(lineX, areaY + areaH - stepH / 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
     steps.forEach((pt, idx) => {
-      const cy = y + stepH * idx + stepH / 2;
-      const cx = pad + r;
-      // 圓圈
+      const cy = areaY + stepH * idx + stepH / 2;
+      const cardY = cy - stepH * 0.40, cardH = stepH * 0.80;
+      // 卡片底（accent 淡色）
+      ctx.fillStyle = hexToRgba(tpl.accent, 0.12);
+      roundRect(ctx, pad, cardY, W - pad * 2, cardH, W * 0.02); ctx.fill();
+
+      // 編號圓
+      const r = Math.min(W * 0.075, stepH * 0.34);
       ctx.fillStyle = tpl.accent;
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(lineX, cy, r, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#ffffff';
       ctx.font = font(800, Math.round(r * 0.9));
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(String(idx + 1), cx, cy + r * 0.05);
+      ctx.fillText(String(idx + 1), lineX, cy + r * 0.05);
+
+      // emoji 圖標
+      const ir = r * 0.85;
+      ctx.font = `${Math.round(ir * 1.4)}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
+      ctx.fillText(icons[idx % icons.length], lineX + r * 1.9, cy);
+
       // 文字
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       ctx.fillStyle = tpl.bulletColor;
-      ctx.font = font(600, Math.round(titleSize * 0.34));
-      const textW = W - pad * 2 - r * 2.8;
-      const textLines = wrapText(ctx, pt, ctx.font, textW, 2);
-      const lh = titleSize * 0.4;
-      textLines.forEach((ln, i) => ctx.fillText(ln, cx + r * 1.5, cy + (i - (textLines.length - 1) / 2) * lh));
+      ctx.font = font(700, Math.round(titleSize * 0.36));
+      const textX = lineX + r * 3.1;
+      const textW = W - pad - textX - W * 0.03;
+      const tl = wrapText(ctx, pt, ctx.font, textW, 2);
+      const lh = titleSize * 0.42;
+      tl.forEach((ln, i) => ctx.fillText(ln, textX, cy + (i - (tl.length - 1) / 2) * lh));
     });
 
     drawFooter(ctx, tpl, W, H, pad, titleSize, font);
@@ -569,9 +838,12 @@
     drawFooter(ctx, tpl, W, H, pad, titleSize, font);
   }
 
-  // 漫畫爆炸框風（標題放喺星形爆炸框入面）
+  // 漫畫爆炸框風（半調網點 + 立體陰影爆炸框，參考 ACT Perspective）
   function renderComicLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
     let y = pad;
+
+    // 半調網點背景
+    drawHalftone(ctx, W, H, tpl.accent);
 
     // badge
     if (tpl.badge) {
@@ -586,39 +858,42 @@
       y = by + bh + W * 0.04;
     }
 
-    // 爆炸框（白色/高對比）
+    // 爆炸框（白色底 + 彩色粗框 + 立體陰影）
     const burstW = W - pad * 2;
-    const burstH = H * 0.38;
+    const burstH = H * 0.40;
     const bx = pad;
     const by = y;
-    drawBurstShape(ctx, bx + burstW / 2, by + burstH / 2, burstW / 2, burstH / 2, 18, tpl.accent);
-    ctx.fillStyle = '#ffffff';
+    const cx0 = bx + burstW / 2, cy0 = by + burstH / 2;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.40)'; ctx.shadowBlur = W * 0.035; ctx.shadowOffsetY = W * 0.014;
+    drawBurstShape(ctx, cx0, cy0, burstW / 2, burstH / 2, 14, '#ffffff');
     ctx.fill();
-    ctx.lineWidth = W * 0.008;
-    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.restore();
+    ctx.lineWidth = W * 0.014; ctx.strokeStyle = tpl.accent; ctx.lineJoin = 'round';
+    drawBurstShape(ctx, cx0, cy0, burstW / 2, burstH / 2, 14, tpl.accent);
     ctx.stroke();
 
-    // 標題放喺爆炸框內（置中）
+    // 標題放喺爆炸框內（置中，黑字）
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = '#1a1a1a';
-    const burstTitleSize = Math.round(titleSize * 0.78);
+    const burstTitleSize = Math.round(titleSize * 0.80);
     const titleFont = font(900, burstTitleSize);
-    const lines = wrapText(ctx, data.title, titleFont, burstW - W * 0.08, 3);
+    const lines = wrapText(ctx, data.title, titleFont, burstW - W * 0.10, 3);
     const totalH = lines.length * burstTitleSize * 1.1;
-    let ty = by + burstH / 2 - totalH / 2 + burstTitleSize * 0.45;
+    let ty = cy0 - totalH / 2 + burstTitleSize * 0.45;
     lines.forEach((ln) => {
       ctx.font = titleFont;
-      ctx.fillText(ln, bx + burstW / 2, ty);
+      ctx.fillText(ln, cx0, ty);
       ty += burstTitleSize * 1.1;
     });
 
-    y = by + burstH + W * 0.04;
+    y = by + burstH + W * 0.05;
 
     // 副標題
     if (data.tagline) {
       ctx.textAlign = 'left'; ctx.textBaseline = 'top';
       ctx.fillStyle = tpl.subColor;
-      ctx.font = font(700, Math.round(titleSize * 0.42));
+      ctx.font = font(800, Math.round(titleSize * 0.44));
       ctx.fillText(data.tagline, pad, y);
       y += titleSize * 0.6;
     }
@@ -626,7 +901,7 @@
     // bullet
     if (data.points && data.points.length) {
       ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-      const bFont = font(600, Math.round(titleSize * 0.34));
+      const bFont = font(700, Math.round(titleSize * 0.34));
       data.points.slice(0, 3).forEach(pt => {
         ctx.fillStyle = tpl.accent;
         ctx.beginPath();
@@ -643,9 +918,31 @@
     drawFooter(ctx, tpl, W, H, pad, titleSize, font);
   }
 
-  // 可愛卡通風（柔和背景 + 放大 emoji + 圓形裝飾）
+  // 半調網點（漫畫風背景）
+  function drawHalftone(ctx, W, H, color) {
+    ctx.save();
+    ctx.globalAlpha = 0.10; ctx.fillStyle = color;
+    const rr = W * 0.012, gap = W * 0.05;
+    for (let yy = gap; yy < H; yy += gap) {
+      for (let xx = gap; xx < W; xx += gap) {
+        ctx.beginPath(); ctx.arc(xx, yy, rr, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  // 可愛卡通風（mesh 漸變 + 貼紙公仔，參考 hk_wealth_mgt）
   function renderCuteLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
     let y = pad;
+
+    // mesh 高光（柔和色塊）
+    const blobColors = [tpl.bg.from, tpl.bg.to, tpl.accent];
+    [[0.25, 0.28], [0.80, 0.22], [0.50, 0.85], [0.15, 0.82]].forEach((p, i) => {
+      const g = ctx.createRadialGradient(W * p[0], H * p[1], 0, W * p[0], H * p[1], Math.max(W, H) * 0.5);
+      g.addColorStop(0, hexToRgba(blobColors[i % blobColors.length], 0.32));
+      g.addColorStop(1, hexToRgba(blobColors[i % blobColors.length], 0));
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    });
 
     // badge
     if (tpl.badge) {
@@ -676,19 +973,24 @@
       y += titleSize * 0.55;
     }
 
-    // 大 emoji 主角（中右）
+    // 大 emoji 主角（中右，白色貼紙圓底 + 陰影）
     if (tpl.mascot) {
-      const mascotSize = Math.round(base * 0.32);
-      ctx.font = `${mascotSize}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif`;
+      const cx = W * 0.72, cy = H * 0.55, mr = base * 0.20;
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = W * 0.025;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(cx, cy, mr * 1.25, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      ctx.font = `${Math.round(mr * 2)}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(tpl.mascot, W * 0.72, H * 0.58);
+      ctx.fillText(tpl.mascot, cx, cy);
     }
 
     // bullet 喺左下
     if (data.points && data.points.length) {
       ctx.textAlign = 'left'; ctx.textBaseline = 'top';
       const bFont = font(600, Math.round(titleSize * 0.34));
-      const maxW = tpl.mascot ? W * 0.55 : W - pad * 2;
+      const maxW = tpl.mascot ? W * 0.52 : W - pad * 2;
       let by2 = y;
       data.points.slice(0, 3).forEach(pt => {
         ctx.fillStyle = tpl.accent;
@@ -877,6 +1179,17 @@
     const topic = document.getElementById('socialTopic').value.trim();
     if (!topic) { alert('請填寫主題'); return; }
 
+    // 系列模式：鎖定基底範本
+    if (seriesState.active) {
+      const baseEl = document.getElementById('seriesBase');
+      if (baseEl) seriesState.templateId = baseEl.value;
+      const nameEl = document.getElementById('seriesName');
+      if (nameEl) seriesState.name = nameEl.value.trim();
+      const epEl = document.getElementById('seriesEp');
+      if (epEl) seriesState.ep = parseInt(epEl.value, 10) || 1;
+      state.templateId = seriesState.templateId;
+    }
+
     const platform = document.getElementById('socialPlatform').value;
     const ratio = document.getElementById('socialRatio').value;
     const style = document.getElementById('socialStyle').value;
@@ -922,6 +1235,14 @@
     Storage.addHistory(entry);
     state.lastHistoryId = entry.id;
     updateDashboardStats();
+
+    // 系列模式：EP 自動 +1 並保存
+    if (seriesState.active) {
+      seriesState.ep += 1;
+      const epEl = document.getElementById('seriesEp');
+      if (epEl) epEl.value = seriesState.ep;
+      saveSeries();
+    }
   }
 
   function buildContent(topic, platform, ratio, style, persona, extra, type, dupMsg, tpl) {
@@ -1211,5 +1532,11 @@
   }
 
   window.generateSocialContent = generate;
-  window.SocialModule = { init, rerenderWithSelected, markPublished, saveRedFoxKey, saveImageGenKey, toggleAiBackground, searchTrendTemplates, applyTrend };
+  window.SocialModule = { init, rerenderWithSelected, markPublished, saveRedFoxKey, saveImageGenKey, toggleAiBackground, searchTrendTemplates, applyTrend, useAiAvatar, clearAvatar, toggleSeries };
+  // 測試用內部 hook（唔影響一般用戶）
+  window.SocialModule.__test = {
+    renderCover,
+    setSeries: (s) => { seriesState = Object.assign(seriesState, s); },
+    setAvatar: (img) => { avatarImage = img; }
+  };
 })();

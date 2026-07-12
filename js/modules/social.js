@@ -68,6 +68,7 @@
     });
     buildGallery();
     renderRedFoxSetting();
+    renderImageGenSetting();
     migrateLegacyKey();
   }
 
@@ -100,6 +101,106 @@
     if (!el) return;
     setRedFoxKey(el.value.trim());
     alert('RedFox API Key 已儲存，並同步去雲端（換裝置登入都會有）。');
+  }
+
+  // ===== AI 圖片生成設定（用戶自填 API Key，可選） =====
+  const IMAGEGEN_PROVIDERS = [
+    { id:'siliconflow', name:'SiliconFlow', endpoint:'https://api.siliconflow.cn/v1/images/generations', model:'Kwai-Kolors/Kolors' },
+    { id:'openrouter', name:'OpenRouter', endpoint:'https://openrouter.ai/api/v1/images/generations', model:'openai/dall-e-3' }
+  ];
+  function getImageGenKey() {
+    let k = '';
+    try { k = Storage.getSetting('imageGenKey') || ''; } catch {}
+    return k;
+  }
+  function setImageGenKey(key) {
+    try { Storage.setSetting('imageGenKey', key || ''); } catch {}
+    if (typeof CloudSync !== 'undefined') CloudSync.pushSetting('imageGenKey', key || '');
+  }
+  function getImageGenProvider() {
+    let p = 'siliconflow';
+    try { p = Storage.getSetting('imageGenProvider') || 'siliconflow'; } catch {}
+    return p;
+  }
+  function setImageGenProvider(p) {
+    try { Storage.setSetting('imageGenProvider', p || 'siliconflow'); } catch {}
+    if (typeof CloudSync !== 'undefined') CloudSync.pushSetting('imageGenProvider', p || 'siliconflow');
+  }
+  function getUseAiBackground() {
+    try { return Storage.getSetting('useAiBackground') === 'true'; } catch { return false; }
+  }
+  function setUseAiBackground(v) {
+    try { Storage.setSetting('useAiBackground', v ? 'true' : 'false'); } catch {}
+    if (typeof CloudSync !== 'undefined') CloudSync.pushSetting('useAiBackground', v ? 'true' : 'false');
+  }
+
+  function renderImageGenSetting() {
+    const box = document.getElementById('imageGenSetting');
+    if (!box) return;
+    const prov = getImageGenProvider();
+    box.innerHTML = `
+      <label class="form-label">🎨 AI 封面背景（可選）</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+        <select class="form-input" id="imageGenProvider" style="width:auto;min-width:120px">
+          ${IMAGEGEN_PROVIDERS.map(p => `<option value="${p.id}" ${p.id === prov ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+        </select>
+        <input type="password" class="form-input" id="imageGenKeyInput" placeholder="sk-xxxxxxxx" value="${escapeHtml(getImageGenKey())}" style="flex:1">
+        <button class="btn btn-sm btn-secondary" onclick="SocialModule.saveImageGenKey()">儲存</button>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;margin-bottom:6px">
+        <input type="checkbox" id="useAiBackground" ${getUseAiBackground() ? 'checked' : ''} onchange="SocialModule.toggleAiBackground(this)">
+        生成時用 AI 畫背景（需要 API Key，會消耗 token）
+      </label>
+      <p class="cover-tip">有 Key 時會按主題生成背景圖，再疊上標題同資料；冇 Key 或唔剔就沿用現有 Canvas 背景。Key 同樣會同步去雲端。</p>
+    `;
+  }
+
+  function saveImageGenKey() {
+    const keyEl = document.getElementById('imageGenKeyInput');
+    const provEl = document.getElementById('imageGenProvider');
+    if (keyEl) setImageGenKey(keyEl.value.trim());
+    if (provEl) setImageGenProvider(provEl.value);
+    alert('AI 圖片設定已儲存。');
+  }
+
+  function toggleAiBackground(cb) {
+    setUseAiBackground(cb && cb.checked);
+  }
+
+  async function generateAiImage(prompt) {
+    const key = getImageGenKey();
+    if (!key) throw new Error('未填寫 AI 圖片 API Key');
+    const provider = IMAGEGEN_PROVIDERS.find(p => p.id === getImageGenProvider()) || IMAGEGEN_PROVIDERS[0];
+    const body = JSON.stringify({
+      model: provider.model,
+      prompt: prompt,
+      n: 1,
+      size: '1024x1024',
+      response_format: 'url'
+    });
+    const res = await fetch(provider.endpoint, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`AI 生圖失敗 (${res.status}): ${txt}`);
+    }
+    const json = await res.json();
+    const url = json && json.data && json.data[0] && (json.data[0].url || json.data[0].b64_json);
+    if (!url) throw new Error('AI 生圖回應冇圖片 URL');
+    return url;
+  }
+
+  function loadImage(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('圖片載入失敗，可能是 CORS 限制'));
+      img.src = url;
+    });
   }
 
   // ===== 範本畫廊 =====
@@ -142,21 +243,38 @@
   }
 
   // ===== Canvas 出圖（核心）=====
-  function renderCover(canvas, tpl, data) {
+  function renderCover(canvas, tpl, data, bgImage) {
     const ctx = canvas.getContext && canvas.getContext('2d');
     if (!ctx) return; // 無 2d context（如測試環境）就跳過
     const W = canvas.width, H = canvas.height;
     ctx.clearRect(0, 0, W, H);
 
-    // 背景漸變
-    const g = tpl.bg.dir === 'd'
-      ? ctx.createLinearGradient(0, 0, W, H)
-      : ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, tpl.bg.from);
-    g.addColorStop(1, tpl.bg.to);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-
+    // 若有 AI 生成背景圖，先畫（保持漸變底以防載唔到）
+    if (bgImage && bgImage.width) {
+      const g = ctx.createLinearGradient(0, 0, W, H);
+      g.addColorStop(0, tpl.bg.from);
+      g.addColorStop(1, tpl.bg.to);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      // cover 模式：保持比例填滿 canvas
+      const scale = Math.max(W / bgImage.width, H / bgImage.height);
+      const dw = bgImage.width * scale, dh = bgImage.height * scale;
+      const dx = (W - dw) / 2, dy = (H - dh) / 2;
+      ctx.globalAlpha = 0.92;
+      ctx.drawImage(bgImage, dx, dy, dw, dh);
+      ctx.globalAlpha = 1;
+      // 加暗色遮罩令文字清晰
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      // 背景漸變
+      const g = tpl.bg.dir === 'd'
+        ? ctx.createLinearGradient(0, 0, W, H)
+        : ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, tpl.bg.from);
+      g.addColorStop(1, tpl.bg.to);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
     // 淺色範本加邊框
     if (tpl.border) {
       ctx.strokeStyle = tpl.accent;
@@ -166,19 +284,29 @@
 
     drawDecor(ctx, tpl, W, H);
 
-    // 預先計算常用尺寸（要在畫 mascot / badge 之前）
+    // 預先計算常用尺寸
     const pad = W * 0.07;
     const base = Math.min(W, H);
     const portrait = H >= W;
     const titleSize = Math.round(base * (portrait ? 0.14 : 0.17));
     const font = (wt, size) => `${wt} ${Math.round(size)}px "PingFang SC","Microsoft YaHei","Heiti SC","Noto Sans CJK SC",sans-serif`;
 
+    // 按範本風格分派繪製
+    if (tpl.layout === 'luxury') renderLuxuryLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
+    else if (tpl.layout === 'infographic') renderInfographicLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
+    else if (tpl.layout === 'compare') renderCompareLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
+    else if (tpl.layout === 'comic') renderComicLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
+    else if (tpl.layout === 'cute') renderCuteLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
+    else renderDefaultLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
+  }
+
+  // 預設佈局（原有邏輯）
+  function renderDefaultLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
     // 卡通主角 emoji（右下角，漫畫吸睛感，唔遮住標題）
     if (tpl.mascot) {
       const mascotSize = Math.round(base * 0.15);
       const mx = W - pad;
       const my = H - pad * 2.8;
-      // 白色半透明圓底，突出公仔
       ctx.save();
       ctx.globalAlpha = 0.18;
       ctx.fillStyle = '#ffffff';
@@ -232,9 +360,8 @@
       const bubbleReserve = tpl.bubble ? base * 0.30 : 0;
       const maxBottom = H - pad - footerReserve - bubbleReserve;
       data.points.slice(0, 3).forEach(pt => {
-        if (by2 >= maxBottom) return; // 無位就唔再畫
+        if (by2 >= maxBottom) return;
         const bl = wrapText(ctx, pt, bFont, W - pad * 2 - W * 0.04, 2);
-        // 如果畫完會超界，縮細啲再試一次
         if (by2 + bl.length * titleSize * 0.4 > maxBottom) {
           ctx.font = font(500, Math.round(titleSize * 0.29));
           return;
@@ -250,23 +377,381 @@
       y = by2;
     }
 
-    // 對話氣泡（右下角，卡通角色「說話」，吸睛）
     if (tpl.bubble) drawBubble(ctx, tpl, W, H, pad, base);
+    drawFooter(ctx, tpl, W, H, pad, titleSize, font);
+  }
 
-    // 底部品牌（右下角，細字 + 半透明底，唔遮住內容）
+  // 深色高端大字風（Alfred 風：黑底 + 金/白字 + 光斑）
+  function renderLuxuryLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
+    // 標題置中放大
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = tpl.titleColor;
+    const luxTitleSize = Math.round(titleSize * 1.15);
+    const titleFont = font(tpl.titleWeight, luxTitleSize);
+    const maxTitleW = W - pad * 2;
+    const lines = wrapText(ctx, data.title, titleFont, maxTitleW, 3);
+    const totalH = lines.length * luxTitleSize * 1.15;
+    let ty = H * 0.42 - totalH / 2 + luxTitleSize * 0.5;
+    lines.forEach((ln) => {
+      // 輕微外發光提升高端感
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = W * 0.02;
+      ctx.fillText(ln, W / 2, ty);
+      ctx.shadowBlur = 0;
+      ty += luxTitleSize * 1.15;
+    });
+
+    // 副標題置中
+    if (data.tagline) {
+      ctx.fillStyle = tpl.subColor;
+      ctx.font = font(600, Math.round(luxTitleSize * 0.35));
+      ctx.fillText(data.tagline, W / 2, H * 0.42 + totalH / 2 + W * 0.04);
+    }
+
+    // 底部 bullet 置中（簡潔）
+    if (data.points && data.points.length) {
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      const bFont = font(500, Math.round(titleSize * 0.32));
+      let by = H * 0.68;
+      data.points.slice(0, 2).forEach(pt => {
+        ctx.fillStyle = tpl.bulletColor;
+        const bl = wrapText(ctx, pt, bFont, W - pad * 2, 2);
+        bl.forEach((ln, i) => ctx.fillText(ln, W / 2, by + i * titleSize * 0.38));
+        by += bl.length * titleSize * 0.38 + W * 0.02;
+      });
+    }
+
+    drawFooter(ctx, tpl, W, H, pad, titleSize, font);
+  }
+
+  // 資訊圖表步驟風（數字圓圈 + 簡短文字）
+  function renderInfographicLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
+    let y = pad;
+
+    // badge
+    if (tpl.badge) {
+      ctx.font = font(700, Math.round(W * 0.032));
+      const tw = ctx.measureText(tpl.badge.text).width;
+      const bh = W * 0.058, bw = tw + W * 0.05, bx = pad, by = pad;
+      ctx.fillStyle = tpl.badge.bg;
+      roundRect(ctx, bx, by, bw, bh, bh * 0.3); ctx.fill();
+      ctx.fillStyle = tpl.badge.color;
+      ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      ctx.fillText(tpl.badge.text, bx + W * 0.025, by + bh / 2);
+      y = by + bh + W * 0.04;
+    }
+
+    // 標題
+    ctx.textBaseline = 'top'; ctx.textAlign = 'left';
+    ctx.fillStyle = tpl.titleColor;
+    const titleFont = font(tpl.titleWeight, Math.round(titleSize * 0.92));
+    const lines = wrapText(ctx, data.title, titleFont, W - pad * 2, 2);
+    lines.forEach((ln, i) => ctx.fillText(ln, pad, y + i * titleSize * 1.05));
+    y += lines.length * titleSize * 1.05 + W * 0.03;
+
+    // 副標題
+    if (data.tagline) {
+      ctx.fillStyle = tpl.subColor;
+      ctx.font = font(600, Math.round(titleSize * 0.38));
+      ctx.fillText(data.tagline, pad, y);
+      y += titleSize * 0.55;
+    }
+
+    // 步驟圓圈（最多 3 步）
+    const steps = (data.points || []).slice(0, 3);
+    const stepH = (H - y - pad * 2.5) / Math.max(steps.length, 1);
+    const r = Math.min(W * 0.09, stepH * 0.32);
+    steps.forEach((pt, idx) => {
+      const cy = y + stepH * idx + stepH / 2;
+      const cx = pad + r;
+      // 圓圈
+      ctx.fillStyle = tpl.accent;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = font(800, Math.round(r * 0.9));
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(String(idx + 1), cx, cy + r * 0.05);
+      // 文字
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = tpl.bulletColor;
+      ctx.font = font(600, Math.round(titleSize * 0.34));
+      const textW = W - pad * 2 - r * 2.8;
+      const textLines = wrapText(ctx, pt, ctx.font, textW, 2);
+      const lh = titleSize * 0.4;
+      textLines.forEach((ln, i) => ctx.fillText(ln, cx + r * 1.5, cy + (i - (textLines.length - 1) / 2) * lh));
+    });
+
+    drawFooter(ctx, tpl, W, H, pad, titleSize, font);
+  }
+
+  // 對比表格風（Expectation vs Reality / Before vs After）
+  function renderCompareLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
+    let y = pad;
+
+    // badge
+    if (tpl.badge) {
+      ctx.font = font(700, Math.round(W * 0.032));
+      const tw = ctx.measureText(tpl.badge.text).width;
+      const bh = W * 0.058, bw = tw + W * 0.05, bx = pad, by = pad;
+      ctx.fillStyle = tpl.badge.bg;
+      roundRect(ctx, bx, by, bw, bh, bh * 0.3); ctx.fill();
+      ctx.fillStyle = tpl.badge.color;
+      ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      ctx.fillText(tpl.badge.text, bx + W * 0.025, by + bh / 2);
+      y = by + bh + W * 0.04;
+    }
+
+    // 標題
+    ctx.textBaseline = 'top'; ctx.textAlign = 'left';
+    ctx.fillStyle = tpl.titleColor;
+    const titleFont = font(tpl.titleWeight, Math.round(titleSize * 0.95));
+    const lines = wrapText(ctx, data.title, titleFont, W - pad * 2, 2);
+    lines.forEach((ln, i) => ctx.fillText(ln, pad, y + i * titleSize * 1.05));
+    y += lines.length * titleSize * 1.05 + W * 0.035;
+
+    // 副標題
+    if (data.tagline) {
+      ctx.fillStyle = tpl.subColor;
+      ctx.font = font(600, Math.round(titleSize * 0.38));
+      ctx.fillText(data.tagline, pad, y);
+      y += titleSize * 0.55;
+    }
+
+    const labels = tpl.compareLabels || ['Expectation', 'Reality'];
+    const colW = (W - pad * 2 - W * 0.03) / 2;
+    const startX = pad;
+    const tableY = y + W * 0.02;
+    const rowH = titleSize * 0.52;
+    const headerH = titleSize * 0.6;
+    const rows = Math.min((data.points || []).length, 3);
+    const tableH = headerH + rows * rowH + W * 0.02;
+
+    // 表頭背景
+    ctx.fillStyle = tpl.accent;
+    roundRect(ctx, startX, tableY, colW, headerH, W * 0.02); ctx.fill();
+    ctx.fillStyle = tpl.border ? tpl.accent : '#ffffff';
+    roundRect(ctx, startX + colW + W * 0.03, tableY, colW, headerH, W * 0.02); ctx.fill();
+
+    // 表頭字
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = getContrastColor(tpl.accent);
+    ctx.font = font(700, Math.round(titleSize * 0.32));
+    ctx.fillText(labels[0], startX + colW / 2, tableY + headerH / 2);
+    ctx.fillStyle = tpl.border ? getContrastColor(tpl.accent) : '#ffffff';
+    ctx.fillText(labels[1] || 'Reality', startX + colW + W * 0.03 + colW / 2, tableY + headerH / 2);
+
+    // 分隔線
+    ctx.strokeStyle = 'rgba(128,128,128,0.25)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= rows; i++) {
+      const ly = tableY + headerH + i * rowH;
+      ctx.beginPath(); ctx.moveTo(startX, ly); ctx.lineTo(startX + colW * 2 + W * 0.03, ly); ctx.stroke();
+    }
+
+    // 內容
+    ctx.font = font(600, Math.round(titleSize * 0.29));
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    (data.points || []).slice(0, rows).forEach((pt, idx) => {
+      const parts = String(pt).split('|');
+      const left = parts[0] || pt;
+      const right = parts[1] || '現實往往唔同…';
+      const cy = tableY + headerH + idx * rowH + rowH / 2;
+      ctx.fillStyle = tpl.titleColor;
+      const lw = wrapText(ctx, left, ctx.font, colW - W * 0.03, 2);
+      lw.forEach((ln, i) => ctx.fillText(ln, startX + colW / 2, cy + (i - (lw.length - 1) / 2) * titleSize * 0.26));
+      ctx.fillStyle = tpl.accent;
+      const rw = wrapText(ctx, right, ctx.font, colW - W * 0.03, 2);
+      rw.forEach((ln, i) => ctx.fillText(ln, startX + colW + W * 0.03 + colW / 2, cy + (i - (rw.length - 1) / 2) * titleSize * 0.26));
+    });
+
+    drawFooter(ctx, tpl, W, H, pad, titleSize, font);
+  }
+
+  // 漫畫爆炸框風（標題放喺星形爆炸框入面）
+  function renderComicLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
+    let y = pad;
+
+    // badge
+    if (tpl.badge) {
+      ctx.font = font(700, Math.round(W * 0.032));
+      const tw = ctx.measureText(tpl.badge.text).width;
+      const bh = W * 0.058, bw = tw + W * 0.05, bx = pad, by = pad;
+      ctx.fillStyle = tpl.badge.bg;
+      roundRect(ctx, bx, by, bw, bh, bh * 0.3); ctx.fill();
+      ctx.fillStyle = tpl.badge.color;
+      ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      ctx.fillText(tpl.badge.text, bx + W * 0.025, by + bh / 2);
+      y = by + bh + W * 0.04;
+    }
+
+    // 爆炸框（白色/高對比）
+    const burstW = W - pad * 2;
+    const burstH = H * 0.38;
+    const bx = pad;
+    const by = y;
+    drawBurstShape(ctx, bx + burstW / 2, by + burstH / 2, burstW / 2, burstH / 2, 18, tpl.accent);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.lineWidth = W * 0.008;
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.stroke();
+
+    // 標題放喺爆炸框內（置中）
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#1a1a1a';
+    const burstTitleSize = Math.round(titleSize * 0.78);
+    const titleFont = font(900, burstTitleSize);
+    const lines = wrapText(ctx, data.title, titleFont, burstW - W * 0.08, 3);
+    const totalH = lines.length * burstTitleSize * 1.1;
+    let ty = by + burstH / 2 - totalH / 2 + burstTitleSize * 0.45;
+    lines.forEach((ln) => {
+      ctx.font = titleFont;
+      ctx.fillText(ln, bx + burstW / 2, ty);
+      ty += burstTitleSize * 1.1;
+    });
+
+    y = by + burstH + W * 0.04;
+
+    // 副標題
+    if (data.tagline) {
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillStyle = tpl.subColor;
+      ctx.font = font(700, Math.round(titleSize * 0.42));
+      ctx.fillText(data.tagline, pad, y);
+      y += titleSize * 0.6;
+    }
+
+    // bullet
+    if (data.points && data.points.length) {
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      const bFont = font(600, Math.round(titleSize * 0.34));
+      data.points.slice(0, 3).forEach(pt => {
+        ctx.fillStyle = tpl.accent;
+        ctx.beginPath();
+        ctx.arc(pad + W * 0.012, y + titleSize * 0.34 * 0.5, W * 0.009, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = tpl.bulletColor;
+        ctx.font = bFont;
+        const bl = wrapText(ctx, pt, bFont, W - pad * 2 - W * 0.04, 2);
+        bl.forEach((ln, i) => ctx.fillText(ln, pad + W * 0.035, y + i * titleSize * 0.4));
+        y += bl.length * titleSize * 0.4 + W * 0.02;
+      });
+    }
+
+    drawFooter(ctx, tpl, W, H, pad, titleSize, font);
+  }
+
+  // 可愛卡通風（柔和背景 + 放大 emoji + 圓形裝飾）
+  function renderCuteLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
+    let y = pad;
+
+    // badge
+    if (tpl.badge) {
+      ctx.font = font(700, Math.round(W * 0.032));
+      const tw = ctx.measureText(tpl.badge.text).width;
+      const bh = W * 0.058, bw = tw + W * 0.05, bx = pad, by = pad;
+      ctx.fillStyle = tpl.badge.bg;
+      roundRect(ctx, bx, by, bw, bh, bh * 0.3); ctx.fill();
+      ctx.fillStyle = tpl.badge.color;
+      ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      ctx.fillText(tpl.badge.text, bx + W * 0.025, by + bh / 2);
+      y = by + bh + W * 0.04;
+    }
+
+    // 標題
+    ctx.textBaseline = 'top'; ctx.textAlign = 'left';
+    ctx.fillStyle = tpl.titleColor;
+    const titleFont = font(tpl.titleWeight, Math.round(titleSize * 0.95));
+    const lines = wrapText(ctx, data.title, titleFont, W - pad * 2, 2);
+    lines.forEach((ln, i) => ctx.fillText(ln, pad, y + i * titleSize * 1.05));
+    y += lines.length * titleSize * 1.05 + W * 0.025;
+
+    // 副標題
+    if (data.tagline) {
+      ctx.fillStyle = tpl.subColor;
+      ctx.font = font(600, Math.round(titleSize * 0.38));
+      ctx.fillText(data.tagline, pad, y);
+      y += titleSize * 0.55;
+    }
+
+    // 大 emoji 主角（中右）
+    if (tpl.mascot) {
+      const mascotSize = Math.round(base * 0.32);
+      ctx.font = `${mascotSize}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(tpl.mascot, W * 0.72, H * 0.58);
+    }
+
+    // bullet 喺左下
+    if (data.points && data.points.length) {
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      const bFont = font(600, Math.round(titleSize * 0.34));
+      const maxW = tpl.mascot ? W * 0.55 : W - pad * 2;
+      let by2 = y;
+      data.points.slice(0, 3).forEach(pt => {
+        ctx.fillStyle = tpl.accent;
+        ctx.beginPath();
+        ctx.arc(pad + W * 0.012, by2 + titleSize * 0.34 * 0.5, W * 0.009, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = tpl.bulletColor;
+        const bl = wrapText(ctx, pt, bFont, maxW - W * 0.04, 2);
+        bl.forEach((ln, i) => ctx.fillText(ln, pad + W * 0.035, by2 + i * titleSize * 0.4));
+        by2 += bl.length * titleSize * 0.4 + W * 0.015;
+      });
+    }
+
+    drawFooter(ctx, tpl, W, H, pad, titleSize, font);
+  }
+
+  // 統一底部品牌
+  function drawFooter(ctx, tpl, W, H, pad, titleSize, font) {
     const footerH = Math.max(W * 0.045, titleSize * 0.35);
     const fx = W - pad;
     const fy = H - pad - footerH / 2;
     const fText = tpl.footer.text;
     ctx.font = font(500, Math.round(W * 0.024));
     const fW = ctx.measureText(fText).width + W * 0.03;
-    // 統一深色半透明底 + 白色字，任何背景都睇到
     ctx.fillStyle = 'rgba(0,0,0,0.22)';
     roundRect(ctx, fx - fW, fy - footerH / 2, fW, footerH, footerH * 0.3);
     ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.95)';
     ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
     ctx.fillText(fText, fx - W * 0.015, fy);
+  }
+
+  // 計算對比色（簡單亮度）
+  function getContrastColor(hex) {
+    const c = hex.replace('#', '');
+    const r = parseInt(c.substr(0, 2), 16) || 0;
+    const g = parseInt(c.substr(2, 2), 16) || 0;
+    const b = parseInt(c.substr(4, 2), 16) || 0;
+    const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+    return yiq >= 128 ? '#111827' : '#ffffff';
+  }
+
+  // 爆炸星形（漫畫風）
+  function drawBurstShape(ctx, cx, cy, rx, ry, spikes, color) {
+    let rot = Math.PI / 2 * 3;
+    let x = cx;
+    let y = cy;
+    let step = Math.PI / spikes;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - ry);
+    for (let i = 0; i < spikes; i++) {
+      x = cx + Math.cos(rot) * rx;
+      y = cy + Math.sin(rot) * ry;
+      ctx.lineTo(x, y);
+      rot += step;
+      x = cx + Math.cos(rot) * (rx * 0.55);
+      y = cy + Math.sin(rot) * (ry * 0.55);
+      ctx.lineTo(x, y);
+      rot += step;
+    }
+    ctx.lineTo(cx, cy - ry);
+    ctx.closePath();
+    ctx.fillStyle = color;
   }
 
   function drawDecor(ctx, tpl, W, H) {
@@ -299,6 +784,22 @@
         ctx.beginPath(); ctx.moveTo(W * i / 5, 0); ctx.lineTo(W * i / 5, H); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0, H * i / 5); ctx.lineTo(W, H * i / 5); ctx.stroke();
       }
+    } else if (tpl.decor === 'sparkle') {
+      // 高端光斑：隨機大小圓點 + 十字星光
+      ctx.globalAlpha = 0.22; ctx.fillStyle = c;
+      [[W*0.15,H*0.20,W*0.025],[W*0.78,H*0.15,W*0.04],[W*0.88,H*0.55,W*0.018],[W*0.22,H*0.75,W*0.03],[W*0.65,H*0.82,W*0.022]]
+        .forEach(([x, y, r]) => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); });
+      ctx.globalAlpha = 0.35;
+      [[W*0.25,H*0.35,W*0.035],[W*0.72,H*0.70,W*0.045]]
+        .forEach(([x, y, s]) => {
+          ctx.fillRect(x - s/2, y - s/6, s, s/3);
+          ctx.fillRect(x - s/6, y - s/2, s/3, s);
+        });
+    } else if (tpl.decor === 'circles') {
+      // 可愛半透明圓圈
+      ctx.globalAlpha = 0.18; ctx.fillStyle = c;
+      [[W*0.82,H*0.18,W*0.18],[W*0.12,H*0.75,W*0.22],[W*0.78,H*0.78,W*0.12]]
+        .forEach(([x, y, r]) => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); });
     }
     ctx.restore();
   }
@@ -372,7 +873,7 @@
   }
 
   // ===== 生成（一鍵出文案＋圖）=====
-  function generate() {
+  async function generate() {
     const topic = document.getElementById('socialTopic').value.trim();
     if (!topic) { alert('請填寫主題'); return; }
 
@@ -384,7 +885,7 @@
     const tpl = (typeof COVER_TEMPLATES !== 'undefined' ? COVER_TEMPLATES : []).find(t => t.id === state.templateId) || null;
 
     const dupMsg = findDuplicate(topic, tpl ? tpl.id : '');
-    const built = buildContent(topic, platform, ratio, style, persona, extra, state.type, dupMsg);
+    const built = buildContent(topic, platform, ratio, style, persona, extra, state.type, dupMsg, tpl);
 
     const out = document.getElementById('socialOutput');
     out.className = 'output-box filled';
@@ -395,7 +896,20 @@
     if (canvas && tpl) {
       const dims = ratioToDims(ratio);
       canvas.width = dims.w; canvas.height = dims.h;
-      renderCover(canvas, tpl, { title: topic, tagline: built.hook, points: built.keyPoints });
+
+      let bgImage = null;
+      if (getUseAiBackground() && getImageGenKey()) {
+        try {
+          const prompt = `A professional social media cover image about ${topic}, Hong Kong finance and insurance theme, modern, clean, no text, no watermark, suitable as background for bold Chinese title overlay, ${tpl.cat} style, ${tpl.layout === 'luxury' ? 'dark background with golden light spots' : 'bright and friendly colors'}`;
+          const url = await generateAiImage(prompt);
+          bgImage = await loadImage(url);
+        } catch (e) {
+          console.warn('AI background failed, fallback to gradient', e);
+          // 失敗就繼續用漸變底
+        }
+      }
+
+      renderCover(canvas, tpl, { title: topic, tagline: built.hook, points: built.keyPoints }, bgImage);
       state.last = { title: topic, tagline: built.hook, points: built.keyPoints, ratio };
     }
 
@@ -410,7 +924,7 @@
     updateDashboardStats();
   }
 
-  function buildContent(topic, platform, ratio, style, persona, extra, type, dupMsg) {
+  function buildContent(topic, platform, ratio, style, persona, extra, type, dupMsg, tpl) {
     const key = Object.keys(TEMPLATES.socialTopics).find(k => topic.includes(k) || k.includes(topic));
     const tplMatch = key ? TEMPLATES.socialTopics[key] : null;
 
@@ -435,6 +949,9 @@
       caption = `${hook}\n\n1. 點解重要？\n2. 常見錯誤\n3. 點樣正確做\n\n有疑問隨時 PM 我 💬`;
     }
     if (extra) caption += `\n\n（備註：${extra}）`;
+
+    // 根據範本 layout 調整要點格式（對比表要 Expectation|Reality）
+    keyPoints = adaptPointsForLayout(keyPoints, tpl, topic);
 
     let xhsBlock = '';
     if (platform === 'xhs-hk' || platform === 'xhs-cn') {
@@ -491,6 +1008,37 @@
     `;
 
     return { html, caption, hook, keyPoints };
+  }
+
+  // 根據範本 layout 調整要點格式
+  function adaptPointsForLayout(points, tpl, topic) {
+    if (!tpl || !tpl.layout) return points;
+    const t = (topic || '').toLowerCase();
+    const mapCompare = () => {
+      if (t.includes('退休') || t.includes('儲蓄') || t.includes('mpf')) {
+        return ['以為 MPF 夠退休|現實係可能只夠基本生活', '以為要一次過儲大筆|其實每月小額都做到', '以為好複雜|有顧問跟住其實好簡單'];
+      }
+      if (t.includes('危疾') || t.includes('重疾')) {
+        return ['以為公司醫保夠|離職就無保障', '以為年輕唔使急|病咗先買可能買唔到', '以為賠一次就夠|其實要覆蓋生活開支'];
+      }
+      if (t.includes('醫療') || t.includes('vhis') || t.includes('自願醫保')) {
+        return ['以為公立醫院快|排期隨時幾個月', '以為買最平就得|保障範圍先係重點', '以為自己好健康|意外隨時發生'];
+      }
+      if (t.includes('儲蓄') || t.includes('慳錢') || t.includes('儲錢')) {
+        return ['以為儲錢靠意志力|其實要自動化', '以為要賺大錢先儲|其實先儲後花', '以為銀行定存夠|跑輸通脹都係蝕'];
+      }
+      return ['以為好簡單|原來有好多細節要注意', '以為唔使急|越遲做成本越高', '以為自己搞得掂|專業意見原來好重要'];
+    };
+    if (tpl.layout === 'compare') return mapCompare();
+    if (tpl.layout === 'infographic') {
+      // 步驟風：將要點包裝成動作式短句
+      return (points || []).slice(0, 3).map((p, i) => `第${i + 1}步：${p}`);
+    }
+    if (tpl.layout === 'comic') {
+      // 爆炸框風：標語式短句
+      return (points || []).slice(0, 3).map(p => `💥 ${p}`);
+    }
+    return points;
   }
 
   // ===== 查重：避免重覆使用（個人 + 全組）=====
@@ -663,5 +1211,5 @@
   }
 
   window.generateSocialContent = generate;
-  window.SocialModule = { init, rerenderWithSelected, markPublished, saveRedFoxKey, searchTrendTemplates, applyTrend };
+  window.SocialModule = { init, rerenderWithSelected, markPublished, saveRedFoxKey, saveImageGenKey, toggleAiBackground, searchTrendTemplates, applyTrend };
 })();

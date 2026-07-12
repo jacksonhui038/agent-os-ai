@@ -4,49 +4,55 @@
 .tpl-gallery {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  max-height: 300px;
+  gap: 12px;
+  max-height: 420px;
   overflow: auto;
-  padding: 4px;
-  margin-top: 4px;
+  padding: 6px;
+  margin-top: 6px;
 }
 .tpl-card {
-  width: 96px;
+  width: 100px;
   flex: 0 0 auto;
   border: 2px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
   background: var(--surface);
-  transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,.06);
 }
 .tpl-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-4px) scale(1.03);
+  border-color: var(--accent, #0ea5e9);
+  box-shadow: 0 8px 18px rgba(0,0,0,.12);
 }
 .tpl-card.selected {
   border-color: var(--accent, #0ea5e9);
-  box-shadow: 0 0 0 2px rgba(14, 165, 233, .35);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, .45), 0 8px 18px rgba(0,0,0,.12);
+  transform: translateY(-4px) scale(1.03);
 }
 .tpl-canvas {
   display: block;
   width: 100%;
   height: auto;
+  background: var(--bg);
 }
 .tpl-label {
   font-size: 11px;
-  padding: 5px 6px;
+  padding: 6px 7px;
   text-align: center;
   color: var(--text-secondary);
   line-height: 1.25;
+  font-weight: 600;
 }
 .tpl-cat {
   display: inline-block;
   font-size: 9px;
-  background: var(--bg);
-  color: var(--text-tertiary);
-  border-radius: 6px;
-  padding: 1px 5px;
+  border-radius: 999px;
+  padding: 2px 6px;
   margin-right: 4px;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0,0,0,.15);
 }
 
 /* 封面圖預覽 */

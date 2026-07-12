@@ -2,12 +2,34 @@
 (function() {
   let state = { type: 'post', templateId: 'pro-navy', last: null, lastHistoryId: null };
 
-  // 畫廊迷你預覽用嘅示範數據
-  const SAMPLE = {
-    title: '醫療保障規劃',
-    tagline: '你嘅保障，夠未？',
-    points: ['公院 vs 私院', '全家點配置', '預算點分配']
-  };
+  // 畫廊迷你預覽用嘅示範數據（按分類各有特色，唔再一式一樣「醫療保障規劃」）
+  function sampleFor(tpl) {
+    const samples = {
+      '專業': { title: '專業分析：危疾險', tagline: '點買先聰明？', points: ['比較公司', '核保注意'] },
+      '溫馨': { title: '媽媽必睇保障', tagline: '一家大細要點保？', points: ['小朋友醫療', '父母危疾'] },
+      '數據': { title: '2026保費比較', tagline: '數據話你知', points: ['保費差異', '保障範圍'] },
+      '極簡': { title: '一句講晒', tagline: '保障唔好遲', points: ['先保人', '再保財'] },
+      '大字報': { title: '千祈唔好咁買！', tagline: '保險避坑指南', points: ['先 compare', '睇清條款'] },
+      '漸變': { title: '靚靚理財法', tagline: '有型又穩陣', points: ['目標為本', '定期檢視'] },
+      '醫療': { title: '醫療保障規劃', tagline: '你嘅保障夠未？', points: ['公院私院', '全家配置'] },
+      '儲蓄': { title: '儲蓄計劃懶人包', tagline: '複利息滾存', points: ['每月供款', '提早退休'] },
+      '招聘': { title: '招募理財夥伴', tagline: '一齊改變人生', points: ['專業培訓', '被動收入'] },
+      '故事': { title: '幫客戶慳到30%', tagline: '真實個案分享', points: ['30歲家庭', '量身訂做'] },
+      '柔和': { title: '新手媽咪保障', tagline: '溫柔規劃第一步', points: ['新手入門', '每月幾百'] },
+      '高端': { title: '高淨值資產配置', tagline: '進階財富策略', points: ['稅務規劃', '家族傳承'] },
+      '對比': { title: '儲蓄 vs 投資', tagline: '邊樣啱你？', points: ['風險比較', '目標為本'] },
+      '分割': { title: '30歲 vs 40歲', tagline: '唔同年齡點規劃', points: ['保費差異', '保障缺口'] },
+      '卡通': { title: '慳錢小秘笈', tagline: '卡通學理財', points: ['養成習慣', '先保護'] }
+    };
+    const cat = tpl.cat || '專業';
+    const s = samples[cat] || samples['專業'];
+    // 卡通範本用佢自己嘅 emoji 對白
+    return {
+      title: s.title,
+      tagline: tpl.mascot ? `${tpl.mascot} ${s.tagline}` : s.tagline,
+      points: s.points
+    };
+  }
 
   // RedFox API 設定（前端用戶自填，唔 hardcode 入 repo）
   // 儲存優先落雲端（user_settings 表），換裝置 login 都會載返；localStorage 只作 fallback
@@ -94,7 +116,8 @@
       card.appendChild(cv);
       const label = document.createElement('div');
       label.className = 'tpl-label';
-      label.innerHTML = `<span class="tpl-cat">${escapeHtml(tpl.cat)}</span>${escapeHtml(tpl.name)}`;
+      const icon = tpl.mascot ? `${tpl.mascot} ` : '';
+      label.innerHTML = `<span class="tpl-cat" style="background:${tpl.accent};color:${tpl.badge && tpl.badge.color ? tpl.badge.color : '#fff'}">${escapeHtml(tpl.cat)}</span>${icon}${escapeHtml(tpl.name)}`;
       card.appendChild(label);
       card.onclick = () => {
         state.templateId = tpl.id;
@@ -103,7 +126,7 @@
         if (document.getElementById('socialCanvas')) rerenderWithSelected();
       };
       wrap.appendChild(card);
-      renderCover(cv, tpl, SAMPLE);
+      renderCover(cv, tpl, sampleFor(tpl));
     });
   }
 
@@ -143,18 +166,19 @@
 
     drawDecor(ctx, tpl, W, H);
 
+    // 預先計算常用尺寸（要在畫 mascot / badge 之前）
+    const pad = W * 0.07;
+    const base = Math.min(W, H);
+    const portrait = H >= W;
+    const titleSize = Math.round(base * (portrait ? 0.14 : 0.17));
+    const font = (wt, size) => `${wt} ${Math.round(size)}px "PingFang SC","Microsoft YaHei","Heiti SC","Noto Sans CJK SC",sans-serif`;
+
     // 卡通主角 emoji（右上角大圖，漫畫吸睛感）
     if (tpl.mascot) {
       ctx.font = `${Math.round(base * 0.30)}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif`;
       ctx.textAlign = 'right'; ctx.textBaseline = 'top';
       ctx.fillText(tpl.mascot, W - pad, pad);
     }
-
-    const font = (wt, size) => `${wt} ${Math.round(size)}px "PingFang SC","Microsoft YaHei","Heiti SC","Noto Sans CJK SC",sans-serif`;
-    const pad = W * 0.07;
-    const portrait = H >= W;
-    const base = Math.min(W, H);
-    const titleSize = Math.round(base * (portrait ? 0.14 : 0.17));
 
     let y = pad;
 

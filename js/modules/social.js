@@ -429,10 +429,12 @@
   function renderDefaultLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
     let y = pad;
 
-    // 先計算公仔會佔幾大、放右下，從而預留文字寬度
-    const mascotW = tpl.mascot ? base * 0.20 : 0;      // 公仔貼紙大概闊度
-    const textMaxW = W - pad * 2 - (tpl.mascot ? mascotW + W * 0.03 : 0);
-    const effectiveTextW = Math.max(textMaxW, W * 0.55); // 最少都要有 55% 闊度
+    // 右下角公仔 + 氣泡佔用右欄，文字區要預留足夠空間
+    const hasBubble = !!tpl.bubble;
+    const hasMascot = !!tpl.mascot;
+    const rightColW = hasBubble ? W * 0.30 : (hasMascot ? base * 0.22 : 0);
+    const textMaxW = W - pad * 2 - (rightColW ? rightColW + W * 0.03 : 0);
+    const effectiveTextW = Math.max(textMaxW, W * 0.50); // 最少都要有 50% 闊度
 
     // 頂部 badge
     if (tpl.badge) {
@@ -956,9 +958,9 @@
     });
 
     // 文字區：如果右下有公仔，預留闊度
-    const mascotW = tpl.mascot ? base * 0.20 : 0;
+    const mascotW = tpl.mascot ? base * 0.22 : 0;
     const textMaxW = W - pad * 2 - (mascotW ? mascotW + W * 0.03 : 0);
-    const effectiveTextW = Math.max(textMaxW, W * 0.55);
+    const effectiveTextW = Math.max(textMaxW, W * 0.50);
 
     // badge
     if (tpl.badge) {
@@ -1017,20 +1019,21 @@
     drawFooter(ctx, tpl, W, H, pad, titleSize, font);
   }
 
-  // 統一底部品牌
+  // 統一底部品牌：有公仔/氣泡時擺左下角，避免同右下角公仔重疊
   function drawFooter(ctx, tpl, W, H, pad, titleSize, font) {
     const footerH = Math.max(W * 0.045, titleSize * 0.35);
-    const fx = W - pad;
-    const fy = H - pad - footerH / 2;
     const fText = tpl.footer.text;
     ctx.font = font(500, Math.round(W * 0.024));
     const fW = ctx.measureText(fText).width + W * 0.03;
+    const alignRight = !(tpl.mascot || tpl.bubble);
+    const fx = alignRight ? W - pad : pad;
+    const fy = H - pad - footerH / 2;
     ctx.fillStyle = 'rgba(0,0,0,0.22)';
-    roundRect(ctx, fx - fW, fy - footerH / 2, fW, footerH, footerH * 0.3);
+    roundRect(ctx, alignRight ? fx - fW : fx, fy - footerH / 2, fW, footerH, footerH * 0.3);
     ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.95)';
-    ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
-    ctx.fillText(fText, fx - W * 0.015, fy);
+    ctx.textBaseline = 'middle'; ctx.textAlign = alignRight ? 'right' : 'left';
+    ctx.fillText(fText, alignRight ? fx - W * 0.015 : fx + W * 0.015, fy);
   }
 
   // 計算對比色（簡單亮度）
@@ -1128,11 +1131,11 @@
     const mascotTop = mascotCy - mascotSize * 0.78;
     const bubbleBottom = mascotTop - W * 0.02; // 氣泡底部喺公仔頂部之上
 
-    // 氣泡字：動態縮細以遷就空間
-    let fs = Math.round(base * 0.048);
+    // 氣泡字：動態縮細以遷就空間，但限制喺右欄之內
+    let fs = Math.round(base * 0.040);
     let f = `600 ${fs}px "PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif`;
     ctx.font = f;
-    const maxW = W * 0.52;
+    const maxW = W * 0.30; // 氣泡唔可以闊過右欄
     let lines = wrapText(ctx, text, f, maxW, 3);
     const lh = fs * 1.28;
     let bh = lines.length * lh + W * 0.05;
@@ -1161,7 +1164,7 @@
 
     const tw = Math.max.apply(null, lines.map(l => ctx.measureText(l).width));
     const bw = Math.min(maxW, tw) + W * 0.05;
-    const bx = Math.min(W - pad - bw, mascotCx - bw * 0.5); // 靠右對齊公仔
+    const bx = W - pad - bw; // 靠右對齊畫布右邊，完全喺右欄之內
 
     ctx.fillStyle = 'rgba(255,255,255,0.96)';
     roundRect(ctx, bx, by, bw, bh, W * 0.035); ctx.fill();

@@ -19,13 +19,13 @@ const SetModule = (() => {
     {
       id: 'negotiation',
       name: 'SET全能顧問',
-      desc: 'SET全能顧問：一個 agent 包晒六大範疇——VHIS 自願醫保、人壽危疾、ECI 勞工保險、MPF/TVC 轉化、員工福利，外加內地客專項。熟悉 2026 市況（霍爾木茲海峽危機、油價波動、供應鏈影響），幫同事產出貼近真實 agent 語氣嘅話術同策略。',
+      desc: 'SET全能顧問：一個 agent 包晒六大範疇——VHIS 自願醫保、人壽危疾、ECI 勞工保險、MPF/TVC 轉化、新員工 Onboarding，外加內地客專項（見面困難、開 case 話術、內地市場知識）。幫你制定談判策略、拆解客戶底牌、模擬簽單對話。',
       author: 'SET',
       uses: '30+',
       hero: true,
       color: '#000',
       icon: '<img src="assets/set-logo.jpg" alt="SET" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:1.5px solid var(--gold);background:#000;" />',
-      welcome: '你好，我係 SET 全能顧問。想傾邊瓣？\n\nVHIS、危疾人壽、ECI、MPF 轉化、員工福利、內地客——六大瓣我都熟。近排海峽危機搞到油價供應鏈亂晒，傾 case 時都可以一齊睇。\n\n你而家有咩情況想傾？',
+      welcome: '你好，我是SET全能顧問，你嘅全能保險顧問。\n\n我包晒六大範疇：VHIS 自願醫保、人壽危疾、ECI 勞工保險、MPF/TVC 轉化、新員工 Onboarding，仲有內地客專項——見內地客嘅困難、開 case 話術、內地市場消息。無論係要拆客戶底牌、準備開價話術、定係講解某款產品，我都可以幫手。\n\n你想從邊方面開始？',
       chips: ['分析客戶底牌', '準備開價話術', 'VHIS 稅務扣減', '處理「已有醫保」異議', '向僱主推 ECI', 'MPF 轉化階梯', '見內地客嘅困難', '開 case 破冰話術', '內地市場最新消息']
     },
     {
@@ -378,23 +378,14 @@ const SetModule = (() => {
 
   // ── 真 LLM 呼叫（ollama / openai-compatible）──
   function buildSystemPrompt(agent) {
-    return '你係「' + agent.name + '」，一個幫香港宏利保險經紀嘅內部 AI 助手。\n\n' +
-      '你嘅角色：\n' + agent.desc + '\n\n' +
-      '【最重要規則】\n' +
-      '- 用粵語諗嘢，唔好用普通話諗完再翻譯。你係香港 agent，講廣東話，唔係翻譯機。\n' +
-      '- 回應要似真人 agent 同同事講嘢：直接、自然、唔好 hard sell。\n' +
-      '- 唔好用呢啲機械人式開場：「真係好開心同你見面」、「團隊可以根據你嘅需要提供合適嘅方案」、「感謝你的查詢」。呢啲太假。\n' +
-      '- 唔好列點（1. 2. 3.）。用一段流暢嘅說話講完。\n' +
-      '- 唔好作太長，一兩段就夠。同事要嚟用，唔係要嚟睇。\n\n' +
-      '【2026 市況背景】\n' +
-      '- 霍爾木茲海峽危機：中東原油出口跌 60%，油價升，亞洲供應鏈亂咗。\n' +
-      '- 做貿易嘅內地客：生意成本升、運輸延誤、現金流有壓力。\n' +
-      '- 傾計時可以自然帶入：「近排海峽嗰單嘢油價升咗，我啲國內客都話有影響…」但唔好硬 sell。\n\n' +
-      '【保險實務】\n' +
-      '- VHIS、危疾人壽、ECI、MPF/TVC、員工福利、內地客——呢啲你都要熟。\n' +
-      '- 畀數字要準：VHIS 扣稅上限 HK$8,000/人、TVC HK$60,000/年。\n' +
-      '- 唔好講「保證回報」，合規行先。\n' +
-      '- 同事問話術就畀一段可以直接抄嘅版本。';
+    return '你係「' + agent.name + '」，一個專為香港保險經紀（Manulife HK 持牌）而設嘅 AI 助手。\n\n' +
+      '你的角色定位：\n' + agent.desc + '\n\n' +
+      '規則：\n' +
+      '- 用繁體中文（粵語口吻）回答，簡潔、實用、可直接出口。\n' +
+      '- 你專注保險銷售實務：VHIS、人壽危疾、ECI 勞工保險、MPF/TVC 轉化、員工福利、內地客專項。\n' +
+      '- 涉及金額數字要準確（VHIS 扣稅上限 HK$8,000/人、TVC HK$60,000/年）。\n' +
+      '- 唔好講「保證回報」等違規字眼；合規優先。\n' +
+      '- 如果對方想要話術／腳本，直接畀一段可以照抄用嘅版本。';
   }
 
   async function callLLM(text) {
@@ -444,17 +435,7 @@ const SetModule = (() => {
     let reply;
     // 空 key pre-check：唔直接 call API 令用家見到 401
     if (cfg.provider === 'openai' && !cfg.apiKey) {
-      reply = '⚠️ 你仲未填 API Key。\n\n請按右上角 ⚙️ 設定 → 撳「SiliconFlow」preset 掣 → 喺「API Key」一欄貼你嘅 key → 撳保存設定後重新發送。\n\n* 未拎 key？去 https://cloud.siliconflow.cn 註冊 → API 密鑰 → 新建（免費）';
-      conversation.push({ role: 'assistant', content: reply });
-      addBotMessage(reply);
-      isBotTyping = false;
-      $('setSendBtn').disabled = false;
-      removeTyping();
-      return;
-    }
-    // file:// protocol 檢查：瀏覽器唔准 file:// 發 fetch 去外部 API
-    if (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') {
-      reply = '⚠️ 你用緊「本機檔案」模式（file://）開呢個 app，瀏覽器唔准直接用 file:// 呼叫外部 API。\n\n解決方法：將呢個 app 上載到網站（GitHub Pages / Vercel / Netlify），或者喺部機用 Live Server / Python http.server 開。\n\n* 淨係想試功能 → 撳「離線示範」preset，唔使任何設定就用到。';
+      reply = '⚠️ 你仲未填 API Key。\n\n請按右上角 ⚙️ 設定 → 撳「NVIDIA」或「OpenRouter」preset 掣 → 喺「API Key」一欄貼你嘅 key → 再撳「保存設定」後重新發送。\n\n* NVIDIA NIM（免費無限）→ https://build.nvidia.com → 註冊 → Settings → API Keys\n* OpenRouter（免費模型）→ https://openrouter.ai/keys → 註冊拎 key';
       conversation.push({ role: 'assistant', content: reply });
       addBotMessage(reply);
       isBotTyping = false;
@@ -474,17 +455,8 @@ const SetModule = (() => {
         conversation.push({ role: 'assistant', content: reply });
       }
     } catch (e) {
-      // 真 LLM 呼叫失敗 → 退回 mock + 友善提示
-      const msg = e.message || '';
-      let hint = '';
-      if (msg.includes('429')) {
-        hint = '\n\n🔁 429 = 免費用量限額短暫爆滿。\n⏳ 等 1 分鐘再試，或者去 OpenRouter 設定 → 加少少 Credits（$1 已經夠用好耐）就唔會再 429。\n🔧 已經幫你轉咗 Google Gemma 4 31B，冇咁多人用，應該冇咁易爆。';
-      } else if (msg.includes('401')) {
-        hint = '\n\n🔑 API Key 無效或過期，請去供應商後台檢查。';
-      } else if (msg.includes('Failed to fetch')) {
-        hint = '\n\n🌐 連線失敗，確認網絡正常後再試。';
-      }
-      reply = (mockReplies[text] || fallbackReply(text)) + '\n\n⚠️ 真 LLM 呼叫失敗（' + msg + '），已退回離線示範回覆。' + hint;
+      // 真 LLM 呼叫失敗 → 退回 mock + 提示，唔會整崩個介面
+      reply = (mockReplies[text] || fallbackReply(text)) + '\n\n⚠️ 真 LLM 呼叫失敗（' + e.message + '），已退回離線示範回覆。';
       conversation.push({ role: 'assistant', content: reply });
     }
     removeTyping();
@@ -538,7 +510,7 @@ const SetModule = (() => {
       html = '<div class="form-group"><label class="form-label" style="color:var(--navy)">API Base URL</label><input id="setLlmBase" class="form-input" value="' + (cfg.baseUrl || '') + '" placeholder="https://api.openai.com/v1"></div>' +
              '<div class="form-group"><label class="form-label" style="color:var(--navy)">API Key</label><input id="setLlmKey" type="password" class="form-input" value="' + (cfg.apiKey || '') + '" placeholder="sk-...（OpenAI / OpenRouter key）"></div>' +
              '<div class="form-group"><label class="form-label" style="color:var(--navy)">模型</label><input id="setLlmModel" class="form-input" value="' + (cfg.model || '') + '" placeholder="gpt-4o-mini / gemini-2.0-flash / claude-3-haiku"></div>';
-      if (hint) hint.innerHTML = '支援任何 OpenAI-compatible 端點。Key 只存在你瀏覽器 localStorage，唔會上傳任何 server。<br><b>SiliconFlow</b>（中國，免費大額）→ cloud.siliconflow.cn<br><b>OpenRouter</b>（外國，免費模型）→ openrouter.ai';
+      if (hint) hint.innerHTML = '支援任何 OpenAI-compatible 外國端點（NVIDIA / OpenRouter / OpenAI / Google）。Key 只存在你瀏覽器 localStorage，唔會上傳任何 server。推薦用 <b>NVIDIA NIM</b>（build.nvidia.com）完全免費無限額，唔使信用卡。';
     } else {
       if (hint) hint.innerHTML = '離線示範模式用內建模擬回覆，唔使任何設定，啟動即用。想用真 LLM 請揀上面兩個。';
     }
@@ -561,13 +533,13 @@ const SetModule = (() => {
     }
   }
 
-  // ── 一鍵切 LLM 供應商 ──
-  // SiliconFlow（siliconflow.cn）：中國服務，CORS 支援，免費額度大，香港直連唔使 VPN
-  // OpenRouter（openrouter.ai）：外國服務，瀏覽器可用（CORS 支援），免費模型 20 RPM
+  // ── 一鍵切 LLM 供應商（全部外國服務，唔用中國 provider）──
+  // NVIDIA NIM（build.nvidia.com）：完全免費、無限額、40 RPM、開源大額模型、OpenAI-compatible
+  // OpenRouter（openrouter.ai）：免費模型（:free 後綴）、20 RPM、多模型閘道
   const LLM_PRESETS = {
-    siliconflow: { label: 'SiliconFlow', provider: 'openai', baseUrl: 'https://api.siliconflow.cn/v1',          model: 'Qwen/Qwen2.5-14B-Instruct' },
-    openrouter:  { label: 'OpenRouter',  provider: 'openai', baseUrl: 'https://openrouter.ai/api/v1',             model: 'google/gemma-4-31b-it:free' },
-    mock:        { label: '離線示範',     provider: 'mock',   baseUrl: '', model: '' }
+    nvidia:      { label: 'NVIDIA（免費無限）',    provider: 'openai', baseUrl: 'https://integrate.api.nvidia.com/v1', model: 'meta/llama-4-maverick' },
+    openrouter:  { label: 'OpenRouter（免費）',    provider: 'openai', baseUrl: 'https://openrouter.ai/api/v1',       model: 'meta-llama/llama-3.3-70b-instruct:free' },
+    mock:        { label: '離線示範',              provider: 'mock',   baseUrl: '', model: '' }
   };
   function quickSwitch(key) {
     const p = LLM_PRESETS[key];

@@ -6,6 +6,7 @@
 <title>Agent OS AI — 保險顧問工作台</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/set.css">
+<link rel="stylesheet" href="css/social.css">
 </head>
 <body>
 
@@ -34,7 +35,6 @@
         <div class="sidebar-title">Agent OS AI</div>
         <div class="sidebar-subtitle">保險顧問工作台</div>
       </div>
-      <button class="sidebar-close" onclick="toggleSidebar()" aria-label="關閉選單">✕</button>
     </div>
 
     <nav class="sidebar-nav">
@@ -72,8 +72,6 @@
 
     <div class="sidebar-footer">v1.0 · 自用版 · Jackson 專屬</div>
   </aside>
-
-  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
   <!-- ===== MAIN ===== -->
   <main class="main">
@@ -122,11 +120,6 @@
         </div>
 
         <h3 style="font-size:16px;font-weight:700;margin-bottom:14px">快速開始</h3>
-        <div id="setMobileEntry" class="quick-action set-mobile-entry" onclick="navigateTo('set')" style="background:linear-gradient(135deg,#14213d,#1d3a6b);color:#fff;border-radius:14px;padding:16px 20px;margin-bottom:14px;display:flex;align-items:center;gap:14px;cursor:pointer">
-          <div style="font-size:28px;line-height:1">🤖</div>
-          <div style="flex:1"><strong style="font-size:15px">SET 全能顧問</strong><br><span style="font-size:12px;color:rgba(255,255,255,.7)">保險 chatbot，用 AI 幫你傾 case / 寫話術</span></div>
-          <div style="font-size:18px;opacity:.6">›</div>
-        </div>
         <div class="grid-2">
           <div class="quick-action" onclick="navigateTo('social')">
             <div class="quick-action-icon" style="background:#dcfce7">✍️</div>
@@ -161,7 +154,7 @@
           <div class="card-header">
             <div>
               <div class="card-title">一鍵出社交圖 / 文案</div>
-              <div class="card-desc">輸入主題、選好平台目標，AI 即刻幫保險顧問準備圖片同文案</div>
+              <div class="card-desc">輸入主題、揀好平台同封面範本，一鍵出文案＋真正嘅封面圖（可下載 PNG）</div>
             </div>
           </div>
 
@@ -231,7 +224,12 @@
             <input type="text" class="form-input" id="socialExtra" placeholder="例：避免硬銷語氣、CTA 使用私訊領取優惠券">
           </div>
 
-          <button class="btn btn-primary btn-lg btn-block" onclick="generateSocialContent()">生成預覽</button>
+          <div class="form-group">
+            <label class="form-label">封面範本（撳一款 → 一鍵出圖）</label>
+            <div id="socialTemplateGallery" class="tpl-gallery"></div>
+          </div>
+
+          <button class="btn btn-primary btn-lg btn-block" onclick="generateSocialContent()">一鍵生成 文案＋圖片</button>
 
           <div class="output-box" id="socialOutput"></div>
         </div>
@@ -547,7 +545,7 @@
               <div class="form-group">
                 <label class="form-label" style="color:var(--navy)">一鍵切供應商</label>
                 <div class="set-preset-row">
-                  <button type="button" class="set-preset-btn" onclick="SetModule.quickSwitch('siliconflow')">SiliconFlow</button>
+                  <button type="button" class="set-preset-btn" onclick="SetModule.quickSwitch('nvidia')">NVIDIA 🆓</button>
                   <button type="button" class="set-preset-btn" onclick="SetModule.quickSwitch('openrouter')">OpenRouter</button>
                   <button type="button" class="set-preset-btn ghost" onclick="SetModule.quickSwitch('mock')">離線示範</button>
                 </div>

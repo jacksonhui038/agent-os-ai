@@ -173,6 +173,9 @@ function renderHistory() {
     return;
   }
 
+  // 偵測「重複主題」：list 係 newest-first，舊嘅重複會標籤
+  const seenTopics = new Set();
+
   let html = '<div style="display:flex;flex-direction:column;gap:8px">';
   h.slice(0, 50).forEach(entry => {
     const typeIcons = { social:'✍️', followup:'💬', proposal:'📋' };
@@ -180,9 +183,19 @@ function renderHistory() {
     const time = new Date(entry.time).toLocaleString('zh-HK');
 
     let detail = '';
-    if (entry.type === 'social') detail = entry.topic || '';
+    if (entry.type === 'social') {
+      const t = (entry.topic || '').trim();
+      const isDup = t && seenTopics.has(t);
+      seenTopics.add(t);
+      const tplName = entry.templateName || '-';
+      const plat = entry.platform || '-';
+      const snippet = (entry.caption || '').replace(/\n/g, ' ').slice(0, 42);
+      detail = `範本「${escapeHtml(tplName)}」· ${escapeHtml(plat)}`
+        + (snippet ? `<br><span style="opacity:.85">${escapeHtml(snippet)}…</span>` : '')
+        + (isDup ? ` <span class="tag tag-orange" style="font-size:10px">重複主題</span>` : '');
+    }
     else if (entry.type === 'followup') detail = `客戶：${entry.client || '-'} · 階段：${entry.stage || '-'}`;
-    else if (entry.type === 'proposal') detail = `客戶：${entry.client || '-'} · 產品：${(entry.products||[]).join(', ')}`;
+    else if (entry.type === 'proposal') detail = `客戶：${entry.client || '-'} · 產品：${(entry.products || []).join(', ')}`;
 
     html += `<div style="padding:12px 14px;background:var(--bg);border-radius:var(--radius-sm);display:flex;align-items:center;gap:10px;font-size:13px">
       <span style="font-size:18px">${typeIcons[entry.type] || '📌'}</span>

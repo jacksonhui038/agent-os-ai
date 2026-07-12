@@ -1,0 +1,87 @@
+/* ===== Social.css — 社交內容引擎（範本畫廊 / 出圖 / 查重）===== */
+
+/* 範本畫廊 */
+.tpl-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-height: 300px;
+  overflow: auto;
+  padding: 4px;
+  margin-top: 4px;
+}
+.tpl-card {
+  width: 96px;
+  flex: 0 0 auto;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--surface);
+  transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.tpl-card:hover {
+  transform: translateY(-2px);
+}
+.tpl-card.selected {
+  border-color: var(--accent, #0ea5e9);
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, .35);
+}
+.tpl-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.tpl-label {
+  font-size: 11px;
+  padding: 5px 6px;
+  text-align: center;
+  color: var(--text-secondary);
+  line-height: 1.25;
+}
+.tpl-cat {
+  display: inline-block;
+  font-size: 9px;
+  background: var(--bg);
+  color: var(--text-tertiary);
+  border-radius: 6px;
+  padding: 1px 5px;
+  margin-right: 4px;
+}
+
+/* 封面圖預覽 */
+.cover-wrap {
+  background: #0b0b0f;
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  justify-content: center;
+}
+.social-canvas {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .35);
+}
+.cover-tip {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin: 10px 0 0;
+  line-height: 1.55;
+}
+
+/* 查重提示 */
+.dup-warn {
+  background: rgba(234, 179, 8, .12);
+  border: 1px solid rgba(234, 179, 8, .4);
+  color: #b45309;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-bottom: 14px;
+  line-height: 1.55;
+}
+/* 深色主題下查重字色轉淺 */
+:root[data-theme="dark"], .dark {
+  .dup-warn { color: #fde68a; }
+}

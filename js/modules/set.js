@@ -298,19 +298,30 @@ const SetModule = (() => {
       .slice(-n)
       .map(m => m.content);
   }
+  function recentAssistantTurns(n) {
+    return conversation
+      .filter(m => m.role === 'assistant')
+      .slice(-n)
+      .map(m => m.content);
+  }
+  function lastAssistantReply() {
+    const arr = recentAssistantTurns(1);
+    return arr.length ? arr[0] : '';
+  }
   function detectEmotion(text) {
     const lower = text.toLowerCase();
     if (/唔識|不會|不会|不懂|唔懂|新手|第一次|驚|怕|緊張|焦虑|焦慮|擔心|担心|壓力|压力|好慌|亂|無從|不知點|點算|點搞|怎麼辦|怎么办|無助|无助/.test(lower)) return 'anxious';
-    if (/煩|討厭|廢|垃圾|冇用|無用|浪費時間|唔好用|不好用|罐頭|機械人|機器人|死板|唔似人|不像人|無聊|无聊/.test(lower)) return 'frustrated';
+    if (/煩|討厭|廢|垃圾|冇用|無用|浪費時間|唔好用|不好用|罐頭|機械人|機器人|死板|唔似人|不像人|無聊|无聊|認真|冇認真|無認真|冇答|無答|冇解決|無解決|無幫助|冇幫助/.test(lower)) return 'frustrated';
     if (/想學|學下|教我|點學|點練|怎麼學|怎樣學|想知|想知道|請問|請教|點樣做好|點樣做先|如何/.test(lower)) return 'curious';
     return 'neutral';
   }
   function inferTopicFromHistory(text) {
     const recent = recentUserTurns(3).join(' ');
     const combined = (recent + ' ' + text).toLowerCase();
+    // 避免「初次見客話術」被單獨一個「僱主」觸發 ECI；ECI 要較強證據
+    if (/(eci|勞工|劳工|工傷|補償).*(僱主|雇主|員工|员工|公司)|僱主|雇主.*(勞工|劳工|員工|员工|工傷|補償|買|買保|法例)/.test(combined)) return 'ECI';
     if (/vhis|自願醫保|醫保|医保|醫療|医疗|住院|扣稅|扣税/.test(combined)) return 'VHIS';
     if (/危疾|重疾|人壽|人寿|ci|癌症|癌|中風|心臟病|嚴重疾病/.test(combined)) return '人壽/危疾';
-    if (/eci|勞工|劳工|僱主|雇主|員工|员工|工傷|補償/.test(combined)) return 'ECI';
     if (/mpf|強積金|强积金|tvc|退休|年金|供款|自願供款/.test(combined)) return 'MPF/TVC';
     if (/內地|内地|跨境|大陸|深圳|北上|國內|国内|普通話|人民幣/.test(combined)) return '內地客';
     if (/儲蓄|储蓄|分紅|分紅險|教育金|美元資產|理財|投资|投資/.test(combined)) return '儲蓄/理財';
@@ -319,6 +330,18 @@ const SetModule = (() => {
     if (/價格|价格|貴|贵|平|便宜|預算|预算|異議|异议|反對|反对|拒絕|拒绝|考慮|考虑|諗緊|想想/.test(combined)) return '處理異議';
     return '';
   }
+  function isProspectingQuestion(text) {
+    const lower = text.toLowerCase();
+    return /搵客|冇客|没客|沒客|冇客見|没客見|客源|人脈|人脉|network|轉介紹|转介绍|referral|點搵客|怎搵客|如何搵客|點找客|點樣搵客|搵人見|約唔到|約人|搵客仔|客仔|潛在客|新客|陌生客|cold call|打電話|名單|leads/.test(lower);
+  }
+  function isStudentProfile(text) {
+    const lower = text.toLowerCase();
+    return /畢業|毕业|大學生|大学生|fresh grad|student|學生|師兄|師弟|同學|同學會|校友|社團|社团|系會|學會|系會|大學畢業|讀緊書|讀書|22|23|24|25 歲|25岁|後生|年轻|年輕/.test(lower);
+  }
+  function hasNetworkHint(text) {
+    const lower = text.toLowerCase();
+    return /有人脈|有人脉|人脈|人脉|識人|识人|friend|朋友|親戚|亲戚|介紹|介绍|轉介|转介|介紹人|介紹客/.test(lower);
+  }
   function inferScriptContext(text) {
     const lower = text.toLowerCase();
     const emotion = detectEmotion(text);
@@ -326,25 +349,84 @@ const SetModule = (() => {
     const recentLower = recent.toLowerCase();
     const topic = inferTopicFromHistory(text);
     let goal = '';
-    if (/約見|约见|見面|见面|約出|约出/.test(lower)) goal = '約見';
+    if (isProspectingQuestion(text)) goal = '搵客';
+    else if (/約見|约见|見面|见面|約出|约出/.test(lower)) goal = '約見';
     else if (/初次|第一次|開場|破冰|拜訪|拜访|開口|開白|唔識見客|不会见客|點見|點樣見/.test(lower)) goal = '初次見客';
     else if (/異議|反对|拒絕|拒绝|價格|貴|預算|考慮|諗緊|想想|再諗/.test(lower)) goal = '處理異議';
     else if (/跟進|跟进|沉默|whatsapp|訊息|message|覆|回覆|追/.test(lower)) goal = '跟進';
     else if (/話術|脚本|script|開場|開口|腳本|怎麼講|點講/.test(recentLower)) goal = '話術';
     return { emotion, topic, goal };
   }
+  // 畢業大學生 + 有人脈 搵客攻略
+  function prospectingForStudent() {
+    return `以你情況（畢業大學生 + 有人脈），最快搵客唔係 cold call，而係用好你嘅「弱關係」：
+
+1. **同學／師兄師弟／社團**  
+   大學 network 最值錢，因為大家後生、開始諗保障。你可以喺 IG / WhatsApp status 講：「而家畢業咗做保險，幫人檢查公司有冇買夠醫保、強積金有冇揀錯基金。」——呢啲係後生仔都關心嘅事。
+
+2. **家庭轉介紹**  
+   同阿爸阿媽、叔伯兄弟講：「我而家做保險，如果身邊有人想檢查下醫保/強積金，可以介紹我，我先幫佢做免費 review。」長輩通常好願意介紹。
+
+3. **LinkedIn / 校友會**  
+   寫一個簡短 DM：「師兄，我而家做財務顧問，專幫後生仔檢查公司有醫保夠唔夠、MPF 有冇揀錯。如果你或者身邊朋友有興趣，可以約 15 分鐘傾吓。」
+
+4. **社交內容**  
+   每星期出 2-3 篇小紅書/IG 講「後生仔買保險常犯錯誤」「公司醫保離職就冇」等，吸引 inbound 查詢。
+
+想我直接幫你寫一段「約同學出嚟傾保險」嘅開場白？我寫一段你照用。`;
+  }
+  // 通用搵客渠道
+  function prospectingGeneral() {
+    return `冇客見好常見，尤其頭半年。最實際嘅 5 個搵客方向：
+
+1. **現有人脈盤點**  
+   列低 50 個你識嘅人（同學、舊同事、親戚、鄰居、健身朋友），send 一個「我轉行做保險，想幫人檢查保障」訊息，唔係 sell，而係通知。
+
+2. **社交內容 inbound**  
+   每星期出 2-3 篇 IG/小紅書/FB：「後生仔買保險 3 個誤區」「公司醫保其實唔夠」等。有人留言就 DM。
+
+3. **LinkedIn 主動出擊**  
+   搜尋同業/校友，send 簡短 DM：「我而家做財務顧問，專幟人檢查醫保/強積金。如果方便，可以約 15 分鐘飲杯嘢傾吓。」
+
+4. **轉介紹系統**  
+   每見完一個客，即使無成交，都問：「你覺得呢個 review 有用？有冇朋友都想做？我可以送佢一份免費保障檢查。」
+
+5. **合作渠道**  
+   搵地產經紀、補習老師、婚禮攝影師等接觸家庭客嘅人，互相介紹。
+
+你而家邊個渠道最啱你？同學網絡、家庭介紹、定社交內容？我針對嗰個渠道幫你寫段開場白。`;
+  }
+  // 通用初次見客開場白（無指定產品時用）
+  function genericOpeningScript() {
+    return `【通用初次見客開場白——後生網絡版】
+
+「阿明，多謝你抽時間出嚟。我知大家好耐冇見，其實我今次唔係想即刻 sell 你嘢。我而家做保險，發覺好多後生仔都唔知道自己公司醫保買得夠唔夠、MPF 有冇揀錯，我想免費幫你做一次保障檢查，十幾分鐘搞掂。你當多個資訊，睇完唔啱都無所謂。」
+
+▸ 重點：
+• 唔好 sell，講「免費檢查」
+• 用後生仔關心嘅話題（公司醫保、MPF）
+• 畀低壓力退路（唔啱都無所謂）
+
+想我按你個客嘅背景（例如內地客、家庭客、僱主）改一版？話我知。`;
+  }
 
   function fallbackReply(text) {
     const lower = text.toLowerCase();
     const ctx = inferScriptContext(text);
-    const SCRIPT_HINT = /話術|话术|腳本|脚本|script|開場|开场|破冰|開白|開口|點講|点讲|點開口|怎麼講|怎么讲|寫段|写段|寫一段|写一段|幫我寫|帮我写|生成|我想要|我要/.test(text);
+    const SCRIPT_HINT = /話術|话术|腳本|脚本|script|開場|开场|破冰|開白|開口|點講|点讲|點開口|怎麼講|怎么讲|寫段|写段|寫一段|写一段|幫我寫|帮我写|生成|我想要|我要|寫一個|写一个/.test(text);
+
+    // 0. 最優先：搵客 / 冇客見 / 人脈 —— 直接畀實質答案，唔再叫佢揀情境
+    if (ctx.goal === '搵客' || isProspectingQuestion(text)) {
+      if (isStudentProfile(text) || isStudentProfile(recentUserTurns(3).join(' '))) return prospectingForStudent();
+      return prospectingGeneral();
+    }
 
     // 1. 用戶表達挫敗 / 覺得罐頭 → 先認同，再引導
     if (ctx.emotion === 'frustrated') {
       return `收到，我感受到你覺得啲回覆太機械、唔似真人。呢個反饋好重要，我哋一齊調整。
 
 為咗寫一段真正貼你嘅話術，我只需要你答兩條：
-1. 你而家最想解決咩場景？（初次見客／約見／處理異議／跟進）
+1. 你而家最想解決咩場景？（初次見客／搵客／約見／處理異議／跟進）
 2. 你個客大概係邊類人？（內地客／僱主／家庭客／年輕客）
 
 你答完，我直接幫你砌一段自然、唔似罐頭嘅開場白。`;
@@ -364,7 +446,7 @@ const SetModule = (() => {
       return `明白，新手階段最緊要係有個框架傍身，唔使驚。我哋可以由一個具體場景開始練：
 
 • 初次見客開場（點開口唔尷尬）
-• 約見低壓力話術（約人出嚟唔硬銷）
+• 搵客／約人見（點搵客、點約出嚟）
 • 處理「我要諗諗」（唔硬銷又唔流失）
 • 跟進沉默客（WhatsApp 點開口）
 
@@ -376,6 +458,7 @@ const SetModule = (() => {
       return `好，想學就最好。我建議由一個具體場景開始練，唔好一次學晒：
 
 • 初次見客開場（點開口唔尷尬）
+• 搵客／約人見（點搵客、點約出嚟）
 • 約見內地客（低壓力約出嚟）
 • 處理「我要諗諗」（唔硬銷又唔流失）
 • 跟進沉默客（WhatsApp 點開口）
@@ -383,8 +466,11 @@ const SetModule = (() => {
 你揀一個，或者講你個客背景，我直接寫段你練。`;
     }
 
-    // 4. 話術相關：唔好直接畀「X 生」範本，先問清楚
+    // 4. 話術相關：唔好直接畀「X 生」範本，先問清楚；但如果已講「初次見客」就畀通用版
     if (SCRIPT_HINT) {
+      if (ctx.goal === '初次見客' || ctx.goal === '約見') {
+        return genericOpeningScript();
+      }
       // 如果已經能推導到 topic，就直接問一個 follow-up
       if (ctx.topic && ctx.goal) {
         return `好，你想做 ${ctx.topic} 嘅 ${ctx.goal}話術。為咗寫得更貼你風格，答我兩條：
@@ -405,7 +491,7 @@ const SetModule = (() => {
 
     // 5. 其餘 keyword 保留原有特定話術，但最後引導更自然
     if (lower.includes('內地') || lower.includes('内地')) return '內地客最緊要係信任同合規：見面安排、破冰用關心唔好硬 sell、簽單要喺香港。你而家係卡喺「約唔到出嚟」，定係「出到嚟唔知講咩」？我針對嗰個環節幫你寫。';
-    if (lower.includes('eci') || lower.includes('僱主') || lower.includes('雇主') || lower.includes('勞工') || lower.includes('劳工')) return '向僱主推 ECI 最自然係用 legal hook：「請咗人就要買，唔買係犯法」。你而家係想開門白，定係想應對「我而家冇請人」？';
+    if (/(eci|勞工|劳工|工傷|補償).*(僱主|雇主|員工|员工|公司)|僱主|雇主.*(勞工|劳工|員工|员工|工傷|補償|買|買保|法例)/.test(text)) return '向僱主推 ECI 最自然係用 legal hook：「請咗人就要買，唔買係犯法」。你而家係想開門白，定係想應對「我而家冇請人」？';
     if (lower.includes('vhis') || lower.includes('醫保') || lower.includes('医保') || lower.includes('醫療') || lower.includes('医疗')) return 'VHIS 講解通常由「慳稅 + 公院排期 + 私院貴」三點入手。你個客係年輕單身，定係有家室？我寫段貼佢嘅版本。';
     if (lower.includes('危疾') || lower.includes('人壽') || lower.includes('重疾')) return '危疾/人壽最緊要講「收入缺口」同「家庭責任」。你個客係單身、已婚未有小朋友，定係有家庭？背景唔同，開口白完全唔同。';
     if (lower.includes('跟進') || lower.includes('跟进') || lower.includes('沉默') || lower.includes('whatsapp') || lower.includes('喚醒') || lower.includes('唤醒')) return '跟進沉默客最怕硬催。我建議三段式：有價值資訊 → 低摩擦選擇題 → 溫和截止。你上次同個客傾完幾耐？主題係咩？我寫段跟進訊息。';
@@ -416,11 +502,17 @@ const SetModule = (() => {
     if (lower.includes('僱主') || lower.includes('雇主') || lower.includes('員工') || lower.includes('员工')) return '僱主客由 ECI 法例切入最自然，建立關係後再 cross-sell 團體醫療同 VHIS。你係想開門白，定係想應對「我而家冇請人」？';
     if (lower.includes('退休') || lower.includes('理財') || lower.includes('理财') || lower.includes('tvc')) return '退休／理財我幫你計缺口同講扣稅。畀我客嘅年齡同目標，我出個藍圖；想要話術就話我知客背景。';
 
-    // 6. 最後 fallback：唔再叫人打指令，而係畀情境選擇
+    // 6. 最後 fallback：如果上個回覆已經係同一個 fallback，改為更具體嘅追問；否則畀情境選擇
+    const last = lastAssistantReply();
+    if (last && last.includes('我聽到喇。我哋可以由一個具體場景開始')) {
+      return `睇返你之前講，我哋講緊「初次見客」同「搵客」。我直接問一句：你而家係卡喺「搵唔到客」，定係「搵到客但唔知點開口」？
+
+你答呢句，我直接寫一段你照用。`;
+    }
     return `我聽到喇。我哋可以由一個具體場景開始，唔使講太複雜：
 
 • 幫我寫初次見客開場
-• 幫我寫約見話術
+• 幫我搵客／約人見
 • 幫我寫處理異議話術
 • 幫我寫跟進沉默客 WhatsApp
 
@@ -863,7 +955,7 @@ const SetModule = (() => {
   }
 
   const api = { init, showDiscover, sendMessage, openSettings, closeSettings, saveSettings, onProviderChange, maskInput, quickSwitch };
-  api.__test = { fallbackReply, detectEmotion, inferScriptContext, recentUserTurns, inferTopicFromHistory, pushConversation: (role, content) => conversation.push({ role, content }) };
+  api.__test = { fallbackReply, detectEmotion, inferScriptContext, recentUserTurns, inferTopicFromHistory, isProspectingQuestion, isStudentProfile, hasNetworkHint, pushConversation: (role, content) => conversation.push({ role, content }) };
   return api;
 })();
 window.SetModule = SetModule;

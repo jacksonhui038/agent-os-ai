@@ -1370,7 +1370,7 @@
     if (base) { hook = base.hooks[0]; points = base.keyPoints; cta = base.cta; tags = base.hashtags; }
     else {
       hook = { professional: `【${topic}】專業分析：點樣做出明智決定`, casual: `講真，${topic}呢家嘢好多人都諗錯咗`, educational: `關於${topic}，你需要知道嘅 3 件事`, storytelling: `幫客做${topic}嘅真實個案分享` }[style] || `關於${topic}`;
-      points = ['點解重要？', '常見錯誤', '點樣正確做'];
+      points = getAnglePoints(topic) || ['點解重要？', '常見錯誤', '點樣正確做'];
       cta = '有疑問隨時 PM 我 💬';
       tags = '#香港保險 #理財 #保障規劃';
     }
@@ -1526,8 +1526,8 @@
         storytelling: `上個月幫一位客戶處理${topic}，佢嘅情況好值得分享`
       };
       hook = hookByStyle[style] || `關於${topic}`;
-      keyPoints = ['點解重要？', '常見錯誤', '點樣正確做'];
-      caption = `${hook}\n\n1. 點解重要？\n2. 常見錯誤\n3. 點樣正確做\n\n有疑問隨時 PM 我 💬`;
+      keyPoints = getAnglePoints(topic) || ['點解重要？', '常見錯誤', '點樣正確做'];
+      caption = `${hook}\n\n${keyPoints.map((k, i) => `${i + 1}. ${k}`).join('\n')}\n\n有疑問隨時 PM 我 💬`;
     }
     if (extra) caption += `\n\n（備註：${extra}）`;
 
@@ -2142,6 +2142,34 @@
   // E — 批量生成一週內容：一次出 5–7 篇，自動排 series
   // ======================================================================
   const ANGLE_SUFFIX = ['懶人包', '常見誤解', '真實個案分享', '2026 最新更新', '點揀先啱自己', '避坑指南', 'Q&A 快問快答'];
+  const ANGLE_POINTS = {
+    '常見誤解': ['最大誤解係咩', '點解錯', '正確理解'],
+    '真實個案分享': ['背景', '點解需要', '結果'],
+    '2026 最新更新': ['新政策', '影響', '行動'],
+    '點揀先啱自己': ['評估自己需要', '比較計劃', '常見陷阱'],
+    '避坑指南': ['常見陷阱', '點樣避開', '專業建議'],
+    'Q&A 快問快答': ['最多人問', '簡短答案', '下一步']
+  };
+
+  function normalizeTopicSeed(seed) {
+    let s = (seed || '').trim();
+    for (const suffix of ANGLE_SUFFIX) {
+      if (s.endsWith(suffix)) return s.slice(0, -suffix.length).trim();
+    }
+    return s;
+  }
+  function expandTopicsFromSeed(seed, count) {
+    const base = normalizeTopicSeed(seed);
+    const topics = [];
+    for (let i = 0; i < count; i++) topics.push(base + ANGLE_SUFFIX[i % ANGLE_SUFFIX.length]);
+    return topics;
+  }
+  function getAnglePoints(topic) {
+    for (const angle of Object.keys(ANGLE_POINTS)) {
+      if (topic.includes(angle)) return ANGLE_POINTS[angle];
+    }
+    return null;
+  }
 
   function renderBatchPanel() {
     const box = document.getElementById('batchPanel');
@@ -2170,10 +2198,12 @@
     if (!topics.length) {
       const seed = (document.getElementById('socialTopic') ? document.getElementById('socialTopic').value : '').trim();
       if (!seed) { alert('請喺上面「主題」欄填一個主題，或喺呢度逐行輸入多個主題。'); return { ok: false }; }
-      topics = ANGLE_SUFFIX.map(s => `${seed}${s}`);
+      topics = expandTopicsFromSeed(seed, count);
+    } else if (topics.length < count) {
+      // 主題數唔夠 → 由第一個主題自動衍生唔同角度，唔會重複
+      topics = expandTopicsFromSeed(topics[0], count);
     }
     topics = topics.slice(0, count);
-    while (topics.length < count && raw) topics.push(topics[topics.length % topics.length]);
 
     const tpls = (typeof COVER_TEMPLATES !== 'undefined' ? COVER_TEMPLATES : []);
     const seriesName = (seriesState && seriesState.name) ? seriesState.name : '每週保險乾貨';
@@ -2331,6 +2361,9 @@
     parseViral,
     rewriteViralText: (raw) => { const el = document.getElementById('viralInput'); if (el) el.value = raw; return rewriteViral(); },
     buildExtraCaption,
+    expandTopicsFromSeed,
+    normalizeTopicSeed,
+    getAnglePoints,
     COMPLIANCE_RULES,
     EXTRA_PLATFORMS
   };

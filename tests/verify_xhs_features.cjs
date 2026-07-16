@@ -70,6 +70,24 @@ function ok(cond, name, extra) { if (cond) { pass++; console.log('✅', name); }
   ok(batchCards.length === 5, 'E: 批量渲染 5 張卡', batchCards.length);
   const batchCap0 = window.document.getElementById('batchCap_0');
   ok(batchCap0 && batchCap0.textContent.includes('Jackson') , 'E: 批量文案含人設簽名');
+  const batchTopics = [];
+  for (let i = 0; i < 5; i++) {
+    const titleEl = batchCards[i].querySelector('.mp-card-title');
+    if (titleEl) batchTopics.push(titleEl.textContent.trim());
+  }
+  ok(new Set(batchTopics).size === 5, 'E: 5 篇主題全部不同', batchTopics);
+  const batchCaps = [];
+  for (let i = 0; i < 5; i++) {
+    const cap = window.document.getElementById('batchCap_' + i);
+    if (cap) batchCaps.push(cap.textContent.trim());
+  }
+  ok(new Set(batchCaps).size === 5, 'E: 5 篇文案內容全部不同', batchCaps.map(c => c.slice(0, 40)));
+  // 衍生主題邏輯：由單一主題自動出 5 個角度
+  const oneTopic5 = T.expandTopicsFromSeed('自願醫保扣稅懶人包', 5);
+  ok(oneTopic5.length === 5, 'E: 單一主題衍生 5 個角度');
+  ok(new Set(oneTopic5).size === 5, 'E: 衍生角度全部不同', oneTopic5);
+  ok(oneTopic5[0] === '自願醫保扣稅懶人包', 'E: 第一角度保留懶人包', oneTopic5[0]);
+  ok(T.normalizeTopicSeed('自願醫保扣稅懶人包') === '自願醫保扣稅', 'E: 會去掉重複角度後綴');
 
   // ---- F 擴展多平台 ----
   const wechat = T.buildExtraCaption('危疾保障', 'wechat', 'professional', 'expert');

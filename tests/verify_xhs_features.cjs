@@ -96,6 +96,18 @@ function ok(cond, name, extra) { if (cond) { pass++; console.log('✅', name); }
   ok(new Set(oneTopic5).size === 5, 'E: 衍生角度全部不同', oneTopic5);
   ok(oneTopic5[0] === '自願醫保扣稅懶人包', 'E: 第一角度保留懶人包', oneTopic5[0]);
   ok(T.normalizeTopicSeed('自願醫保扣稅懶人包') === '自願醫保扣稅', 'E: 會去掉重複角度後綴');
+  // 系列內去重：同一批生成唔會重複出現同一個通用 fact
+  const used = new Set();
+  const r1 = T.getRichContent('自願醫保扣稅懶人包', 'professional', 'expert', 'xhs', used);
+  r1.entries.forEach(e => used.add(e.t));
+  const r2 = T.getRichContent('自願醫保扣稅真實個案分享', 'professional', 'expert', 'xhs', used);
+  r2.entries.forEach(e => used.add(e.t));
+  const r3 = T.getRichContent('自願醫保扣稅2026 最新更新', 'professional', 'expert', 'xhs', used);
+  r3.entries.forEach(e => used.add(e.t));
+  const allTitles = [].concat(r1.entries.map(e => e.t), r2.entries.map(e => e.t), r3.entries.map(e => e.t));
+  ok(new Set(allTitles).size === allTitles.length, 'E: 懶人包+個案+最新更新 無重複標題', allTitles);
+  ok(!r2.points.some(p => p.includes('每人扣 HK$8,000')), 'E: 真實個案篇不再 appended 通用 facts');
+  ok(!r3.points.some(p => p.includes('每人扣 HK$8,000')), 'E: 最新更新篇不再 appended 通用 facts');
 
   // ---- F 擴展多平台 ----
   const wechat = T.buildExtraCaption('危疾保障', 'wechat', 'professional', 'expert');

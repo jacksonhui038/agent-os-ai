@@ -1361,8 +1361,8 @@
   }
 
   // 平台專屬 caption（長短 / 語氣按平台調整）
-  function buildPlatformCaption(topic, key, style, persona, extra, audience) {
-    const rich = getRichContent(topic, style, persona, key);
+  function buildPlatformCaption(topic, key, style, persona, extra, audience, rich) {
+    rich = rich || getRichContent(topic, style, persona, key);
     const T = (typeof TEMPLATES !== 'undefined' ? TEMPLATES : { socialTopics: {} });
     const tags = rich.match ? T.socialTopics[rich.match].hashtags : suggestTags(topic, key === 'xhs' ? 'xhs' : key);
     const points = rich.points;
@@ -1496,12 +1496,12 @@
     document.body.removeChild(ta);
   }
 
-  function buildContent(topic, platform, ratio, style, persona, extra, type, dupMsg, tpl) {
+  function buildContent(topic, platform, ratio, style, persona, extra, type, dupMsg, tpl, rich) {
     const platformNames = { 'fb': 'Facebook / Instagram', 'threads': 'Threads', 'xhs-hk': '小紅書 · HK 版', 'xhs-cn': '小紅書 · 內地版', 'linkedin': 'LinkedIn' };
     const styleNames = { professional: '專業型', casual: '親切貼地', educational: '教育型', storytelling: '故事型' };
     const personaNames = { expert: '資深顧問', friendly: '鄰家朋友', mentor: '導師型' };
 
-    const rich = getRichContent(topic, style, persona, platform);
+    rich = rich || getRichContent(topic, style, persona, platform);
     let hook = rich.hook;
     let keyPoints = rich.canvasPoints;
     let caption = `${rich.hook}\n\n${rich.points.map((k, i) => `${i + 1}. ${k}`).join('\n')}\n\n${rich.cta}`;
@@ -2170,8 +2170,18 @@
         { t: '買自己就夠', d: '錯！父母、子女、配偶都各自有額度，忽略就白白浪費扣稅空間' },
         { t: '保費全額可扣', d: '錯！只扣「標準保費」上限內部分，靈活計劃超出標準保費嘅保費唔可扣' }
       ],
-      case: '客戶 A 一家四口（自己+配偶+2 子女）買認可計劃，全年合資格保費 HK$32,000 全數扣稅，邊際稅率 12%，慳咗約 HK$3,840，仲有個人保障',
-      updates: '2026 政府繼續推廣自願醫保，認可產品名單持續增加；投保前上政府「自願醫保計劃」官網核對產品是否「認可」，同埋留意保險公司因醫療通脹逐年調整靈活計劃保費',
+      case: {
+        background: '客戶 A 一家四口（自己+配偶+2 子女），兩夫妻都做緊嘢，稅階約 12%',
+        need: '佢想善用自願醫保扣稅，但唔清楚全家額度同點配靈活計劃',
+        result: '最終全家人各買一份認可計劃，全年合資格保費 HK$32,000 全數扣稅，慳咗約 HK$3,840 稅',
+        lesson: '一家幾口一齊規劃，額度可以疊加，慳稅效果更明顯'
+      },
+      updates: [
+        { t: '認可產品持續擴充', d: '2026 政府「自願醫保計劃」官網持續更新認可產品名單，投保前記得核對是否「認可」' },
+        { t: '保費按醫療通脹調整', d: '保險公司會因醫療通脹逐年調整靈活計劃保費，續保前留意加幅' },
+        { t: '扣稅上限維持 HK$8,000', d: '2026/27 課稅年度每份合資格保單保費扣稅上限仍為 HK$8,000，每位受養人獨立計算' },
+        { t: '電子報稅更方便', d: '稅務局網上報稅已預設相關欄位，填寫保費金額即可，唔使另交收據' }
+      ],
       selection: [
         { t: '計清家庭額度', d: '數下有幾多受養人，鎖定總扣稅額度（人數 × HK$8,000）' },
         { t: '標準 vs 靈活', d: '預算緊、要平揀標準；想保障廣、賠得多、包未知病症揀靈活' },
@@ -2205,8 +2215,18 @@
         { t: '賠一次就完', d: '錯！可揀多次賠償/分組計劃，抗復發同其他危疾' },
         { t: '所有癌症都包', d: '錯！受保範圍睇條款，早期/原位癌賠付比例同嚴重唔同' }
       ],
-      case: '客戶 B 35 歲確診乳癌，危疾賠 HK$100 萬，用嚟請外傭照顧、填補半年停工收入，醫療保另報手術費，家庭開支冇斷',
-      updates: '2026 多家保司推「癌症三次賠」、擴闊兒童先天性疾病保障；投保前比較不保事項清單同等候期',
+      case: {
+        background: '客戶 B 35 歲已婚，兩年前開始供樓，同時供緊家庭開支',
+        need: '佢以為有公司醫保就夠，後來發現停工治療期間收入會斷，供樓都有壓力',
+        result: '確診乳癌後，危疾保賠咗 HK$100 萬，用嚟請外傭照顧、填補半年停工收入，醫療保另報手術費',
+        lesson: '危疾保重點唔係醫藥費，而係填補收入缺口，有家庭責任更要配備'
+      },
+      updates: [
+        { t: '多次賠償計劃普及', d: '2026 多家保司推「癌症三次賠」，抗復發同其他危疾都有保障' },
+        { t: '兒童先天病保障擴闊', d: '部分計劃加強兒童先天性疾病保障，投保前比較不保事項清單' },
+        { t: '等候期仍主流 90 日', d: '新計劃等候期多維持 90 日，愈早投保愈早過等候期' },
+        { t: '保費豁免成標配', d: '愈來愈多計劃附設「危疾保費豁免」，確診後唔使再供保費' }
+      ],
       selection: [
         { t: '計保額', d: '建議保額 = 年薪 5-10 倍 + 未還按揭 + 子女教育費' },
         { t: '賠幾多次', d: '預算緊揀單次（平）；想抗復發揀多次/分組賠償' },
@@ -2239,8 +2259,18 @@
         { t: '公司有團體險就夠', d: '錯！離職即無，自己買先有保證' },
         { t: '人壽等於儲錢', d: '錯！定期壽險純保障，要儲蓄選終身/儲蓄險' }
       ],
-      case: '客戶 C 40 歲家庭支柱，買 HK$300 萬定期壽險，年保費千幾蚊，等如幫屋企人買咗個安全網',
-      updates: '2026 網上投保（term life）普及、核保加快；部分計劃加「末期疾病預支」權益，唔使等身故先拎',
+      case: {
+        background: '客戶 C 40 歲，家庭主要收入來源，有兩個小朋友同未供完嘅樓按',
+        need: '佢擔心萬一自己有事，家人會斷供同應付唔到教育開支',
+        result: '買咗 HK$300 萬定期壽險，年保費千幾蚊，等於幫屋企人買咗個安全網',
+        lesson: '壽險唔係幫自己，而係保障家人嘅生活質素同財務安全'
+      },
+      updates: [
+        { t: '網上投保更普及', d: '2026 網上定期壽險（term life）核保加快，部分計劃免驗身' },
+        { t: '末期疾病預支', d: '部分計劃加「末期疾病預支」權益，唔使等身故先拎賠償' },
+        { t: '保費年輕最平', d: '後生健康時投保最抵，過 50 歲保費升幅顯著' },
+        { t: '受益人要指定', d: '指定受益人可加快理賠，避免變成遺產處理' }
+      ],
       selection: [
         { t: '計責任缺口', d: '未還按揭 + 子女教育 + 家庭開支×10 + 父母供養' },
         { t: '定期 vs 終身', d: '預算緊、純保障揀定期；想傳承/儲蓄揀終身' },
@@ -2272,8 +2302,18 @@
         { t: '回報全保證', d: '錯！大部分係非保證，睇實現率' },
         { t: '越短年期越叻', d: '錯！長線（10 年+）先見到複息效果' }
       ],
-      case: '客戶 D 每月供 HK$5,000 儲蓄險，目標 18 年後仔女大學費，預期戶口值翻倍，強制儲到一筆教育金',
-      updates: '2026 各大保司推多元貨幣計劃（USD/HKD/CNY 自由切換）抗匯率；分紅實現率披露更透明，投保前查閱',
+      case: {
+        background: '客戶 D 想為仔女儲大學學費，但驚自己中途會拎嚟用',
+        need: '佢需要一個強制儲蓄、長線滾存、有身故槓桿嘅工具',
+        result: '每月供 HK$5,000 儲蓄險，目標 18 年後仔女大學費，預期戶口值翻倍',
+        lesson: '儲蓄險最適合自制力唔夠、目標清晰嘅長期錢，唔好用短期資金買'
+      },
+      updates: [
+        { t: '多元貨幣計劃', d: '2026 各大保司推 USD/HKD/CNY 自由切換計劃，抗匯率風險' },
+        { t: '分紅實現率更透明', d: '監管要求披露更清晰，投保前要查公司過往紅利實現率' },
+        { t: '保證比例要睇清', d: '新計劃強調保證現金價值比例，預算緊要揀保證多啲' },
+        { t: '長線回報預期 4-6%', d: '預期長線回報維持 4-6%，但非保證部分視投資表現' }
+      ],
       selection: [
         { t: '定目標年期', d: '先定教育/退休目標年期，再揀計劃' },
         { t: '保證 vs 非保證', d: '比較保證現金價值比例，預算緊要保證多啲' },
@@ -2305,8 +2345,18 @@
         { t: '公司醫療夠', d: '錯！離職即無，自己買先有保證' },
         { t: '醫療包門診', d: '錯！一般住院險唔包普通門診，要另買門診附加' }
       ],
-      case: '客戶 E 腸胃出血入院做手術，醫療保報咗 HK$18 萬，自己零支出，仲有得揀私家病房',
-      updates: '2026 部分計劃加強癌症治療（標靶/免疫療法）保障；自願醫保靈活計劃保障表持續更新',
+      case: {
+        background: '客戶 E 突然腸胃出血入院，需要做手術並住幾日私家病房',
+        need: '佢驚手術費同住院雜費會一筆過用咗儲蓄',
+        result: '醫療保報咗 HK$18 萬，自己零支出，仲有得揀私家病房',
+        lesson: '住院醫療保實報實銷，避免一次大病就侵蝕積蓄'
+      },
+      updates: [
+        { t: '癌症治療加強', d: '2026 部分計劃加強標靶/免疫療法保障，睇清條款上限' },
+        { t: '靈活計劃持續更新', d: '自願醫保靈活計劃保障表定期更新，投保前比較最新版本' },
+        { t: '保證續保成重點', d: '老咗有病都續到保係揀醫療保嘅關鍵，唔好忽略' },
+        { t: '高端醫療選擇多', d: '高端醫療（IMG）計劃更多，全球保障同私家醫院選擇更靈活' }
+      ],
       selection: [
         { t: '揀房級', d: '按預算揀大房/半私家/私家' },
         { t: '計墊底費', d: '捱到嘅墊底費越高，保費越平' },
@@ -2335,8 +2385,18 @@
         { t: '有醫療就夠', d: '錯！意外險嘅傷殘賠償醫療保冇，係一筆過現金' },
         { t: '意外險貴', d: '錯！意外險其實好平，槓桿高' }
       ],
-      case: '客戶 F 行山跌倒斷手，意外險賠咗傷殘金 + 醫療費，停工都有收入補償',
-      updates: '部分計劃加每日住院現金、COVID 後重建保障，核保寬鬆咗',
+      case: {
+        background: '客戶 F 假日行山跌倒，斷手兼要做手術',
+        need: '佢唔止要醫療費，仲驚短期內返唔到工冇收入',
+        result: '意外險賠咗傷殘金 + 意外醫療費，停工期間都有收入補償',
+        lesson: '意外險保嘅係傷殘同收入中斷，同醫療保互補'
+      },
+      updates: [
+        { t: '住院現金附加', d: '部分計劃加每日住院現金，住院期間多一筆生活費' },
+        { t: '核保更寬鬆', d: '意外險核保普遍簡單，好多職業都買到' },
+        { t: '特定活動保障', d: '潛水、攀岩等可另加特別保障，出發前確認受保範圍' },
+        { t: '傷殘定義要睇清', d: '永久傷殘同部分傷殘賠償比例各計劃不同，投保前要比較' }
+      ],
       selection: [
         { t: '計保額', d: '保額揀年薪幾倍，傷殘先夠補' },
         { t: '睇傷殘表', d: '比較傷殘定義同賠償比例' },
@@ -2363,8 +2423,18 @@
         { t: '強積金夠退休', d: '錯！一般唔夠，要自補儲蓄/年金' },
         { t: '唔使理', d: '錯！基金揀錯回報差很遠，要定期檢視' }
       ],
-      case: '客戶 G 用 TVC 每年供滿 HK$6 萬，一嚟扣稅二嚟儲多筆退休錢',
-      updates: '2026「積金易」平台(eMPF)全面到位，管理費下降，轉計劃更方便',
+      case: {
+        background: '客戶 G 35 歲，開始諗退休規劃，想額外儲多筆退休錢同慳稅',
+        need: '佢發現強積金強制供款未必夠退休，需要一個合法扣稅嘅自願儲蓄渠道',
+        result: '用 TVC 每年供滿 HK$6 萬，一嚟扣稅二嚟儲多筆退休錢',
+        lesson: '強積金係基本盤，想退休生活質素好啲要額外自願供款或配其他儲蓄'
+      },
+      updates: [
+        { t: '積金易 eMPF 全面到位', d: '2026「積金易」平台全面運作，管理費下降，轉計劃更方便' },
+        { t: 'TVC 上限 HK$6 萬', d: '自願性供款（TVC）每年扣稅上限維持 HK$6 萬' },
+        { t: '預設投資策略較穩', d: '核心累積基金（DIS）適合唔想理嘅懶人，費用較低' },
+        { t: '65 歲取回主流', d: '一般 65 歲可取回，永久離港等特定情況可提早' }
+      ],
       selection: [
         { t: '檢視風險', d: '按年齡同風險承受揀股票/混合/保守基金' },
         { t: '用核心累積', d: '核心累積基金（DIS）平衡啲，適合大部分人' },
@@ -2392,8 +2462,18 @@
         { t: '網上呃人', d: '錯！搵持牌保險中介就安全，可查牌照' },
         { t: '買一次就夠', d: '錯！要定期覆檢，人生變保障都要變' }
       ],
-      case: '好多客一開始都唔知自己缺咩，傾多幾句、做個財務分析，先發現原來保障有大缺口',
-      updates: '2026 網上投保、AI 分析普及，資訊更透明，但都要搵專業幫手解讀',
+      case: {
+        background: '好多客一開始都唔知自己缺咩，只係聽人講要買保險',
+        need: '佢哋需要一個清晰嘅財務分析，先知道自己保障缺口同預算',
+        result: '傾多幾句、做個財務分析，先發現原來保障有大缺口，最後對症下藥',
+        lesson: '唔好盲目跟風，先釐清目標同缺口，先揀到啱自己嘅方案'
+      },
+      updates: [
+        { t: '網上投保更普及', d: '2026 網上投保渠道更多，但要注意是否持牌中介' },
+        { t: 'AI 分析工具興起', d: 'AI 工具可以幫做初步財務分析，但最終都要專業人手解讀' },
+        { t: '資訊更透明', d: '保險公司披露要求更嚴格，投保前要主動查詢產品細則' },
+        { t: '專業諮詢仍重要', d: '雖然資訊多，但個人情況千差萬別，搵專業幫手規劃更穩陣' }
+      ],
       selection: [
         { t: '定目標', d: '先寫低你想解決咩問題' },
         { t: '計預算', d: '計下每月可以留幾多錢做規劃' },
@@ -2424,25 +2504,68 @@
     return m[angle] || `關於${base}`;
   }
 
-  function pickAngleEntries(kb, angle) {
-    switch (angle) {
-      case '懶人包': return (kb.facts || []).slice(0, 4);
-      case '常見誤解': return (kb.myths || []).slice(0, 4);
-      case '真實個案分享': return [{ t: '個案背景', d: kb.case }].concat((kb.facts || []).slice(0, 2));
-      case '2026 最新更新': return [{ t: '2026 最新', d: kb.updates }].concat((kb.facts || []).slice(0, 3));
-      case '點揀先啱自己': return (kb.selection || []).slice(0, 4);
-      case '避坑指南': return (kb.pitfalls || kb.myths || []).slice(0, 4);
-      case 'Q&A 快問快答': return (kb.faq || []).map(f => ({ t: f.q, d: f.a })).slice(0, 4);
-      default: return (kb.facts || []).slice(0, 4);
-    }
+  function entryKey(e) {
+    if (e && e.q) return 'Q:' + e.q;
+    return e && e.t ? e.t : JSON.stringify(e);
   }
 
-  function generateDetailedContent(topic, angle, style, persona) {
+  function pickAngleEntries(kb, angle, usedSet) {
+    usedSet = usedSet || new Set();
+    const out = [];
+    const add = (e) => {
+      const k = entryKey(e);
+      if (!usedSet.has(k) && !out.some(o => entryKey(o) === k)) { out.push(e); }
+    };
+
+    switch (angle) {
+      case '懶人包':
+        (kb.facts || []).forEach(add);
+        break;
+      case '常見誤解':
+        (kb.myths || []).forEach(add);
+        break;
+      case '真實個案分享':
+        if (kb.case && typeof kb.case === 'object') {
+          add({ t: '個案背景', d: kb.case.background });
+          add({ t: '點解需要', d: kb.case.need });
+          add({ t: '結果', d: kb.case.result });
+          add({ t: '可以學到咩', d: kb.case.lesson });
+        } else if (kb.case) {
+          add({ t: '個案背景', d: kb.case });
+        }
+        break;
+      case '2026 最新更新':
+        (kb.updates || []).forEach(add);
+        break;
+      case '點揀先啱自己':
+        (kb.selection || []).forEach(add);
+        break;
+      case '避坑指南':
+        (kb.pitfalls || []).forEach(add);
+        break;
+      case 'Q&A 快問快答':
+        (kb.faq || []).forEach(f => add({ t: f.q, d: f.a }));
+        break;
+      default:
+        (kb.facts || []).forEach(add);
+    }
+
+    // 專屬角度內容不足 4 條，從未用過嘅 facts 補充，避免同系列重複
+    if (out.length < 4) {
+      const need = 4 - out.length;
+      const extra = (kb.facts || []).filter(f => !usedSet.has(entryKey(f)) && !out.some(o => entryKey(o) === entryKey(f))).slice(0, need);
+      out.push(...extra);
+    }
+
+    return out.slice(0, 4);
+  }
+
+  function generateDetailedContent(topic, angle, style, persona, usedSet) {
     const base = normalizeTopicSeed(topic);
     const dom = detectDomain(topic);
     const kb = TOPIC_KB[dom] || TOPIC_KB.generic;
     const hook = (kb.hooks && kb.hooks[angle]) ? kb.hooks[angle] : defaultAngleHook(base, angle);
-    const entries = pickAngleEntries(kb, angle || '懶人包');
+    const entries = pickAngleEntries(kb, angle || '懶人包', usedSet);
     const canvasPoints = entries.map(e => e.t);
     const capPoints = entries.map(e => e.t + (e.d ? '：' + e.d : ''));
     const cta = kb.cta || '有疑問隨時 PM 我 💬，免費幫你做個人分析';
@@ -2450,25 +2573,26 @@
   }
 
   // 統一內容入口：有角度後綴 → 用知識庫；否則 template → 否則 domain 通用
-  function getRichContent(topic, style, persona, platform) {
+  function getRichContent(topic, style, persona, platform, usedSet) {
     const angle = getAngleOf(topic);
     if (angle) {
-      const det = generateDetailedContent(topic, angle, style, persona);
-      return { hook: det.hook, points: det.capPoints, canvasPoints: det.canvasPoints, cta: det.cta };
+      const det = generateDetailedContent(topic, angle, style, persona, usedSet);
+      return { hook: det.hook, points: det.capPoints, canvasPoints: det.canvasPoints, cta: det.cta, entries: det.entries };
     }
     const key = Object.keys(TEMPLATES.socialTopics).find(k => topic.includes(k) || k.includes(topic));
     if (key) {
       const b = TEMPLATES.socialTopics[key];
-      return { hook: b.hooks[0], points: b.keyPoints, canvasPoints: b.keyPoints, cta: b.cta, match: key };
+      const pts = b.keyPoints.map(p => ({ t: p, d: '' }));
+      return { hook: b.hooks[0], points: b.keyPoints, canvasPoints: b.keyPoints, cta: b.cta, match: key, entries: pts };
     }
-    const det = generateDetailedContent(topic, '', style, persona);
+    const det = generateDetailedContent(topic, '', style, persona, usedSet);
     const hookByStyle = {
       professional: `【${topic}】專業分析：點樣做出明智決定`,
       casual: `講真，${topic}呢件事，好多人都諗錯咗`,
       educational: `關於${topic}，你需要知道嘅重點`,
       storytelling: `上個月幫一位客戶處理${topic}，佢嘅情況好值得分享`
     };
-    return { hook: hookByStyle[style] || `關於${topic}`, points: det.capPoints, canvasPoints: det.canvasPoints, cta: det.cta };
+    return { hook: hookByStyle[style] || `關於${topic}`, points: det.capPoints, canvasPoints: det.canvasPoints, cta: det.cta, entries: det.entries };
   }
 
   function renderBatchPanel() {
@@ -2516,12 +2640,15 @@
     if (!out) return { ok: false };
     let html = `<div class="dup-warn" style="background:#eef2ff;border-color:#6366f1;color:#3730a3;margin-top:10px">📅 已生成 <b>${topics.length}</b> 篇（系列：${escapeHtml(seriesName)}，EP.${startEp}–EP.${startEp + topics.length - 1}）。逐篇有小紅書文案＋圖，可下載／複製。</div><div class="mp-grid">`;
     const items = [];
+    const usedSet = new Set();
     topics.forEach((topic, idx) => {
       const ep = startEp + idx;
       const tpl = tpls.length ? tpls[idx % tpls.length] : { id: 'pro-navy', name: '專業' };
-      let cap = buildPlatformCaption(topic, 'xhs', style, persona, '', personaProfile.audience || 'all');
+      const rich = getRichContent(topic, style, persona, 'xhs', usedSet);
+      (rich.entries || []).forEach(e => usedSet.add(entryKey(e)));
+      let cap = buildPlatformCaption(topic, 'xhs', style, persona, '', personaProfile.audience || 'all', rich);
       if (sig) cap += '\n\n' + sig;
-      items.push({ topic, ep, tpl, cap });
+      items.push({ topic, ep, tpl, cap, rich });
       html += `
         <div class="mp-card">
           <div class="mp-card-title">EP.${ep} · ${escapeHtml(topic)}</div>
@@ -2545,7 +2672,7 @@
       const cv = document.getElementById('batchCanvas_' + idx);
       if (!cv) return;
       cv.width = 1080; cv.height = 1440;
-      const built = buildContent(it.topic, 'xhs', '3:4', style, persona, '', 'post', null, it.tpl);
+      const built = buildContent(it.topic, 'xhs', '3:4', style, persona, '', 'post', null, it.tpl, it.rich);
       const data = { title: it.topic, tagline: built.hook, points: built.keyPoints };
       seriesState.active = true; seriesState.ep = it.ep; seriesState.name = seriesName;
       try { renderCover(cv, it.tpl, data, null); } catch (e) { console.warn(e); }

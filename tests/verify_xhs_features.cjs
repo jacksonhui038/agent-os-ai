@@ -82,6 +82,14 @@ function ok(cond, name, extra) { if (cond) { pass++; console.log('✅', name); }
     if (cap) batchCaps.push(cap.textContent.trim());
   }
   ok(new Set(batchCaps).size === 5, 'E: 5 篇文案內容全部不同', batchCaps.map(c => c.slice(0, 40)));
+  ok(batchCaps.every(c => c.length > 200), 'E: 每篇文案都夠詳細 (>200 字)', batchCaps.map(c => c.length));
+  const detailWords = ['一筆過', '年薪', '醫療保', '確診', '保額', 'HK$'];
+  ok(batchCaps.some(c => detailWords.some(w => c.includes(w))), 'E: 文案含實質保險知識點', batchCaps.map(c => c.slice(0, 24)));
+  // 知識庫直接驗證
+  const det = T.generateDetailedContent('危疾保障常見誤解', '常見誤解', 'professional', 'expert');
+  ok(det.canvasPoints.length >= 3 && det.capPoints.length >= 3, 'E: 知識庫產生多角度實質內容', det.canvasPoints);
+  ok(det.capPoints[0].includes('：'), 'E: 知識庫內容含「標題：解釋」');
+  ok(T.detectDomain('自願醫保扣稅') === 'vhis' && T.detectDomain('危疾保障') === 'ci', 'E: 主題領域偵測正確', [T.detectDomain('自願醫保扣稅'), T.detectDomain('危疾保障')]);
   // 衍生主題邏輯：由單一主題自動出 5 個角度
   const oneTopic5 = T.expandTopicsFromSeed('自願醫保扣稅懶人包', 5);
   ok(oneTopic5.length === 5, 'E: 單一主題衍生 5 個角度');

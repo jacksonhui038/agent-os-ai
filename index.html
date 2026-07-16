@@ -224,6 +224,20 @@
             <input type="text" class="form-input" id="socialExtra" placeholder="例：避免硬銷語氣、CTA 使用私訊領取優惠券">
           </div>
 
+          <div class="form-group" id="personaPanel" style="border:1px dashed var(--border);padding:14px;border-radius:var(--radius-sm);background:#eef2ff"></div>
+
+          <div class="form-group" id="viralPanel" style="border:1px dashed var(--border);padding:14px;border-radius:var(--radius-sm);background:#fff7ed"></div>
+
+          <div class="form-group" id="compliancePanel" style="border:1px dashed var(--border);padding:14px;border-radius:var(--radius-sm);background:#fef2f2"></div>
+
+          <div class="form-group" id="batchPanel" style="border:1px dashed var(--border);padding:14px;border-radius:var(--radius-sm);background:#f0fdf4"></div>
+
+          <div class="form-group">
+            <label class="form-label">🏷️ 一鍵生成小紅書標籤（貼題＋流量）</label>
+            <button class="btn btn-sm btn-primary" onclick="SocialModule.generateTags()">生成標籤</button>
+            <div id="tagOut"></div>
+          </div>
+
           <div class="form-group" id="redfoxSetting"></div>
 
           <div class="form-group" id="imageGenSetting"></div>
@@ -254,6 +268,9 @@
           </div>
           <div style="display:flex;gap:10px;margin-top:10px">
             <button class="btn btn-lg btn-block" style="background:linear-gradient(90deg,#0f2c4c,#1e4d7b);color:#fff;border:none" onclick="SocialModule.generateRealistic()">✨ 寫實 AI 封面（似片中美工）</button>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:10px">
+            <button class="btn btn-lg btn-block" style="background:linear-gradient(90deg,#0ea5e9,#38bdf8);color:#fff;border:none" onclick="SocialModule.generateExtraPlatforms()">🌐 出更多平台文案（微信／WhatsApp／抖音／TG／LinkedIn）</button>
           </div>
 
           <div class="output-box" id="socialOutput"></div>

@@ -78,6 +78,12 @@
     loadSeries();
     loadAvatarFromSession();
     migrateLegacyKey();
+    // A–F 小紅書強化：人設 / 爆款拆解洗稿 / 合規 / 標籤 / 批量 / 多平台
+    loadPersonaProfile();
+    renderPersonaPanel();
+    renderViralPanel();
+    renderCompliancePanel();
+    renderBatchPanel();
   }
 
   // 升級兼容：將舊 localStorage 個 key 喺雲端就緒時自動遷移去 user_settings（換裝置都有）
@@ -1410,6 +1416,9 @@
     const data = { title: topic, tagline: built.hook, points: built.keyPoints };
     const captions = {};
     MULTI_PLATFORMS.forEach(p => { captions[p.key] = buildPlatformCaption(topic, p.key, style, persona, extra, audience); });
+    // A：人設定位 —— 所有平台 caption 加上你嘅專業簽名
+    const sig = personaSignature();
+    if (sig) MULTI_PLATFORMS.forEach(p => { captions[p.key] += '\n\n' + sig; });
 
     const out = document.getElementById('socialOutput');
     if (!out) return { ok: false };
@@ -1432,7 +1441,11 @@
           </div>
         </div>`;
     });
-    html += `</div><div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-sm btn-secondary" onclick="SocialModule.copyAllMulti()">複製全部文案</button></div>`;
+    html += `</div><div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-sm btn-secondary" onclick="SocialModule.copyAllMulti()">複製全部文案</button>
+      <button class="btn btn-sm btn-secondary" onclick="SocialModule.appendExtraPlatforms('${escapeHtml(topic).replace(/'/g, "\\'")}')">🌐 出更多平台文案（微信／WhatsApp／抖音／TG／LinkedIn）</button>
+      <button class="btn btn-sm btn-secondary" onclick="SocialModule.scanCurrentOutput()">🛡️ 合規審查</button>
+    </div><div id="mpExtraOut"></div><div id="mpComplianceOut"></div>`;
     out.innerHTML = html;
 
     // 畫 3 張 canvas
@@ -1809,12 +1822,516 @@
       .replace(/'/g, '&#39;');
   }
 
+  // ======================================================================
+  // A — 人設定位（Persona Profile）：所有生成內容圍繞你嘅專業定位
+  // ======================================================================
+  let personaProfile = { enabled: false, nick: '', niche: '', tone: 'expert', audience: 'all', tagline: '', cta: '' };
+
+  const AUDIENCE_OPTS = [
+    { v: 'all', t: '全年齡泛理財' },
+    { v: 'cn', t: '內地高淨值客' },
+    { v: 'family', t: '年輕家庭' },
+    { v: 'young', t: '職場新鮮人' },
+    { v: 'senior', t: '退休／準退休' },
+    { v: 'boss', t: '老闆／企業主' }
+  ];
+
+  function getPersonaProfile() { return personaProfile; }
+
+  function savePersonaProfile() {
+    try { Storage.setSetting('personaProfile', JSON.stringify(personaProfile)); } catch (e) {}
+    if (typeof CloudSync !== 'undefined') CloudSync.pushSetting('personaProfile', JSON.stringify(personaProfile));
+  }
+
+  function loadPersonaProfile() {
+    try {
+      const raw = Storage.getSetting('personaProfile');
+      if (raw) { const o = JSON.parse(raw); if (o && typeof o === 'object') personaProfile = Object.assign(personaProfile, o); }
+    } catch (e) {}
+  }
+
+  function renderPersonaPanel() {
+    const box = document.getElementById('personaPanel');
+    if (!box) return;
+    const p = personaProfile;
+    const aud = AUDIENCE_OPTS.map(o => `<option value="${o.v}" ${o.v === p.audience ? 'selected' : ''}>${escapeHtml(o.t)}</option>`).join('');
+    box.innerHTML = `
+      <label class="form-label">🧑‍💼 我的人設定位（所有內容圍繞你嘅專業形象，風格一致）</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-bottom:8px">
+        <input type="checkbox" id="personaEnabled" ${p.enabled ? 'checked' : ''} onchange="SocialModule.savePersona()"> 啟用人設（生成文案自動加你嘅簽名 / 定位語）
+      </label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <input type="text" id="personaNick" class="form-input" style="flex:1;min-width:130px" placeholder="稱呼，例：Jackson｜危疾規劃師" value="${escapeHtml(p.nick)}">
+        <input type="text" id="personaNiche" class="form-input" style="flex:1;min-width:130px" placeholder="專業定位，例：專攻家庭醫療＋危疾" value="${escapeHtml(p.niche)}">
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <select id="personaTone" class="form-input" style="width:auto;min-width:120px">
+          <option value="expert" ${p.tone === 'expert' ? 'selected' : ''}>語氣：專業可靠</option>
+          <option value="friendly" ${p.tone === 'friendly' ? 'selected' : ''}>語氣：親切貼地</option>
+          <option value="mentor" ${p.tone === 'mentor' ? 'selected' : ''}>語氣：導師啟發</option>
+        </select>
+        <select id="personaAudience" class="form-input" style="width:auto;min-width:140px">${aud}</select>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <input type="text" id="personaTagline" class="form-input" style="flex:1;min-width:150px" placeholder="招牌 slogan，例：保障唔使貴，啱先最緊要" value="${escapeHtml(p.tagline)}">
+        <input type="text" id="personaCta" class="form-input" style="flex:1;min-width:150px" placeholder="慣用 CTA，例：留言「保障」免費做檢查" value="${escapeHtml(p.cta)}">
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="SocialModule.savePersona()">儲存人設</button>
+      <p class="cover-tip">填一次就得，之後每次生成文案都會自動用返你嘅定位、語氣、目標客群同簽名，令成個帳號風格一致。會同步去雲端，換裝置登入都有。</p>
+    `;
+  }
+
+  function savePersona() {
+    const g = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+    const cb = document.getElementById('personaEnabled');
+    personaProfile.enabled = cb ? !!cb.checked : personaProfile.enabled;
+    personaProfile.nick = (g('personaNick') || '').trim();
+    personaProfile.niche = (g('personaNiche') || '').trim();
+    personaProfile.tone = g('personaTone') || 'expert';
+    personaProfile.audience = g('personaAudience') || 'all';
+    personaProfile.tagline = (g('personaTagline') || '').trim();
+    personaProfile.cta = (g('personaCta') || '').trim();
+    savePersonaProfile();
+    // 若人設語氣有設定，順帶同步去主表單嘅「人設」select，令單張生成都一致
+    const ps = document.getElementById('socialPersona');
+    if (ps && personaProfile.enabled) ps.value = personaProfile.tone;
+  }
+
+  // 生成內容尾部嘅人設簽名（enabled 先出）
+  function personaSignature() {
+    const p = personaProfile;
+    if (!p.enabled) return '';
+    const bits = [];
+    if (p.nick) bits.push(p.nick);
+    if (p.niche) bits.push(p.niche);
+    let out = '';
+    if (p.tagline) out += '✨ ' + p.tagline;
+    if (bits.length) out += (out ? '\n' : '') + '—— ' + bits.join(' · ');
+    return out.trim();
+  }
+
+  // ======================================================================
+  // D — 小紅書標籤優化：按主題自動生成貼題有流量嘅 #hashtags
+  // ======================================================================
+  const TAG_LIBRARY = [
+    { re: /(醫療|醫保|VHIS|自願醫保|住院|門診)/i, tags: ['#香港醫療險', '#自願醫保', '#VHIS', '#高端醫療', '#住院保障'] },
+    { re: /(危疾|重疾|癌症|嚴重疾病)/i, tags: ['#危疾保險', '#重疾險', '#癌症保障', '#保障缺口'] },
+    { re: /(儲蓄|退休|理財|MPF|TVC|複利|年金)/i, tags: ['#儲蓄保險', '#退休規劃', '#理財筆記', '#複利', '#被動收入'] },
+    { re: /(家庭|小朋友|兒童|BB|親子|媽媽|爸爸)/i, tags: ['#家庭保障', '#兒童保險', '#新手爸媽', '#親子理財'] },
+    { re: /(扣稅|稅務|報稅|免稅)/i, tags: ['#扣稅攻略', '#稅務優惠', '#報稅'] },
+    { re: /(內地|大灣區|跨境|來港|來香港)/i, tags: ['#香港保險', '#跨境投保', '#大灣區', '#內地客戶'] },
+    { re: /(人壽|壽險|身故|傳承)/i, tags: ['#人壽保險', '#財富傳承', '#家庭保障'] },
+    { re: /(投資|基金|美元|保單)/i, tags: ['#投資理財', '#資產配置', '#分散風險'] }
+  ];
+  const TAG_COMMON = ['#香港保險', '#保險知識', '#理財', '#乾貨分享', '#保障規劃'];
+
+  function suggestTags(topic, platform) {
+    const set = [];
+    TAG_LIBRARY.forEach(g => { if (g.re.test(topic || '')) g.tags.forEach(t => { if (set.indexOf(t) < 0) set.push(t); }); });
+    TAG_COMMON.forEach(t => { if (set.indexOf(t) < 0) set.push(t); });
+    // 小紅書多啲 tag（8），其他平台少啲（5）
+    const limit = platform === 'xhs' ? 8 : 5;
+    return set.slice(0, limit).join(' ');
+  }
+
+  function generateTags() {
+    const topicEl = document.getElementById('socialTopic');
+    const topic = (topicEl ? topicEl.value : '').trim();
+    if (!topic) { alert('請先填「主題」，再生成標籤。'); return; }
+    const xhs = suggestTags(topic, 'xhs');
+    const ig = suggestTags(topic, 'ig');
+    const out = document.getElementById('tagOut');
+    if (out) {
+      out.innerHTML = `
+        <div class="proposal-section" style="border-color:#e11d48;margin-top:10px">
+          <h4>🏷️ 小紅書標籤（8 個，貼題＋流量）</h4>
+          <pre class="output-content" id="tagXhs">${escapeHtml(xhs)}</pre>
+          <button class="btn btn-sm btn-ghost copy-btn" onclick="copySingleText('tagXhs', this)">複製</button>
+          <h4 style="margin-top:10px">🏷️ IG／FB 標籤（5 個）</h4>
+          <pre class="output-content" id="tagIg">${escapeHtml(ig)}</pre>
+          <button class="btn btn-sm btn-ghost copy-btn" onclick="copySingleText('tagIg', this)">複製</button>
+        </div>`;
+    }
+  }
+
+  // ======================================================================
+  // C — 內容合規審查：掃描保險 / 內地平台監管紅線敏感詞
+  // ======================================================================
+  const COMPLIANCE_RULES = [
+    { re: /(保證回報|保證收益|穩賺|包賺|一定賺|零風險|無風險|絕對安全)/g, level: 'high', msg: '保證回報／零風險', fix: '改為「目標回報」「預期」「非保證」，並標明投資風險' },
+    { re: /(高收益|高回報|收益穩定|穩定收益)/g, level: 'high', msg: '誇大收益', fix: '加註「非保證，實際收益視乎投資表現／分紅」' },
+    { re: /(最好|第一|最佳|最強|最平|最抵|最平價|唯一|頂級|排名第一)/g, level: 'mid', msg: '絕對化用語', fix: '改為「較適合」「其中一個選擇」，避免絕對化' },
+    { re: /(必賠|穩賠|包批|包過|包核保|一定賠|全部都賠)/g, level: 'high', msg: '誇大理賠承諾／誤導核保', fix: '改為「符合保單條款下賠付」，理賠視乎個別條款' },
+    { re: /(內幕|秘密渠道|走後門|特殊渠道|灰色)/g, level: 'high', msg: '違規渠道暗示', fix: '刪除' },
+    { re: /(治愈|根治|療效|藥到病除)/g, level: 'mid', msg: '醫療療效宣稱', fix: '保險內容避免醫療療效字眼' },
+    { re: /(免費贈送|送錢|回贈現金|回佣|返佣)/g, level: 'mid', msg: '不當利益引誘／回佣', fix: '刪除或改為合規優惠描述' },
+    { re: /(炒|包升|升值保證|一定升)/g, level: 'high', msg: '誇大升值', fix: '刪除保證升值字眼' }
+  ];
+
+  function checkCompliance(text) {
+    const hits = [];
+    if (!text) return hits;
+    COMPLIANCE_RULES.forEach(rule => {
+      rule.re.lastIndex = 0;
+      const found = text.match(rule.re);
+      if (found && found.length) {
+        hits.push({ words: Array.from(new Set(found)), level: rule.level, msg: rule.msg, fix: rule.fix });
+      }
+    });
+    return hits;
+  }
+
+  function renderComplianceResult(text, mountId) {
+    const mount = document.getElementById(mountId);
+    if (!mount) return;
+    const hits = checkCompliance(text);
+    if (!hits.length) {
+      mount.innerHTML = `<div class="dup-warn" style="background:#ecfdf5;border-color:#10b981;color:#065f46;margin-top:10px">✅ 未發現常見違規／敏感字眼。發佈前仍建議自行再核對最新監管要求。</div>`;
+      return;
+    }
+    const total = hits.reduce((n, h) => n + h.words.length, 0);
+    let html = `<div class="dup-warn" style="background:#fef2f2;border-color:#ef4444;color:#991b1b;margin-top:10px">⚠️ 發現 <b>${hits.length}</b> 類、共 <b>${total}</b> 個需注意字眼，建議修改後再發：</div>`;
+    html += '<div class="proposal-section" style="border-color:#ef4444">';
+    hits.forEach(h => {
+      const badge = h.level === 'high' ? '<span class="tag" style="background:#ef4444;color:#fff">高風險</span>' : '<span class="tag" style="background:#f59e0b;color:#fff">留意</span>';
+      html += `<div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)">
+        ${badge} <b>${escapeHtml(h.msg)}</b><br>
+        <span style="color:#ef4444">命中：${h.words.map(w => escapeHtml(w)).join('、')}</span><br>
+        <span style="color:var(--muted)">建議：${escapeHtml(h.fix)}</span>
+      </div>`;
+    });
+    html += '</div>';
+    mount.innerHTML = html;
+  }
+
+  function renderCompliancePanel() {
+    const box = document.getElementById('compliancePanel');
+    if (!box) return;
+    box.innerHTML = `
+      <label class="form-label">🛡️ 內容合規審查（保險 / 內地平台監管紅線）</label>
+      <textarea id="complianceInput" class="form-input" rows="4" placeholder="貼上你想發佈嘅文案，或撳生成後嘅「合規審查」自動帶入…"></textarea>
+      <div style="margin-top:8px"><button class="btn btn-sm btn-primary" onclick="SocialModule.scanCompliance()">掃描敏感詞</button></div>
+      <div id="complianceOut"></div>
+      <p class="cover-tip">會標出「保證回報 / 零風險 / 最好 / 必賠」等常見違規字眼並俾修改建議。純本地運算，唔會上傳你嘅文案。</p>
+    `;
+  }
+
+  function scanCompliance() {
+    const el = document.getElementById('complianceInput');
+    renderComplianceResult(el ? el.value : '', 'complianceOut');
+  }
+
+  // 由生成結果一鍵帶入合規審查
+  function scanCurrentOutput() {
+    const parts = [];
+    ['mpCap_ig', 'mpCap_xhs', 'mpCap_fb'].forEach(id => { const e = document.getElementById(id); if (e) parts.push(e.textContent); });
+    const text = parts.join('\n\n');
+    renderComplianceResult(text, 'mpComplianceOut');
+  }
+
+  // ======================================================================
+  // B — 爆款拆解 + 洗稿：貼小紅書筆記／文案 → 拆結構 → 改寫成你風格
+  // ======================================================================
+  function renderViralPanel() {
+    const box = document.getElementById('viralPanel');
+    if (!box) return;
+    box.innerHTML = `
+      <label class="form-label">🔥 爆款拆解 + 洗稿（貼小紅書筆記文案，AI 拆結構再改寫成你風格）</label>
+      <textarea id="viralInput" class="form-input" rows="5" placeholder="貼上一篇爆款小紅書 / 抖音筆記全文（標題＋正文＋標籤）…"></textarea>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-sm btn-primary" onclick="SocialModule.analyzeViral()">🔍 拆解結構</button>
+        <button class="btn btn-sm btn-secondary" onclick="SocialModule.rewriteViral()">✍️ 洗稿成我風格</button>
+      </div>
+      <div id="viralOut"></div>
+      <p class="cover-tip">拆解會分析：鉤子（hook）、內容結構、關鍵詞、情緒點、CTA、點解會爆。洗稿會保留爆款框架、換成你嘅人設語氣同合規用字。</p>
+    `;
+  }
+
+  function parseViral(raw) {
+    const lines = raw.split('\n').map(l => l.trim()).filter(l => l);
+    const hook = lines[0] || '';
+    const pointRe = /^(\d+[\.、)]|[①-⑨]|[1-9]️⃣|[•\-\*]|第[一二三四五六七八九]|[✅💡📌👉🔥⭐️])/;
+    const ctaRe = /(留言|評論|評論區|私訊|私信|DM|PM|關注|收藏|點贊|扣1|扣\s*1|領取|拎|回覆|回复)/;
+    const points = lines.filter(l => pointRe.test(l)).slice(0, 8);
+    const ctas = lines.filter(l => ctaRe.test(l));
+    const tags = (raw.match(/#[^\s#]+/g) || []).slice(0, 15);
+    const emojiCount = (raw.match(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu) || []).length;
+    const kw = [];
+    ['醫療', '醫保', '危疾', '重疾', '儲蓄', '退休', '理財', '扣稅', '家庭', '兒童', '內地', '跨境', '人壽', '保費', '核保', '賠', '保障', '香港'].forEach(k => { if (raw.includes(k)) kw.push(k); });
+    return { hook, points, ctas, tags, emojiCount, chars: raw.replace(/\s/g, '').length, keywords: kw };
+  }
+
+  function analyzeViral() {
+    const el = document.getElementById('viralInput');
+    const raw = el ? el.value.trim() : '';
+    const out = document.getElementById('viralOut');
+    if (!raw) { alert('請先貼上一篇爆款筆記文案。'); return; }
+    if (!out) return;
+    const a = parseViral(raw);
+    const whyViral = [];
+    if (/[?？]/.test(a.hook) || /你|竟然|原來|千祈|唔好|居然|驚/.test(a.hook)) whyViral.push('鉤子用咗提問／反差／製造好奇，第一句就抓住讀者');
+    if (a.points.length >= 3) whyViral.push('用咗清單體（' + a.points.length + ' 點），資訊密度高、易讀易收藏');
+    if (a.emojiCount >= 5) whyViral.push('emoji 豐富（' + a.emojiCount + ' 個），視覺節奏好、親和力強');
+    if (a.ctas.length) whyViral.push('有明確互動 CTA（留言／關注），谷評論同曝光');
+    if (a.tags.length >= 5) whyViral.push('標籤够多（' + a.tags.length + ' 個），吃到搜尋＋推薦流量');
+    if (!whyViral.length) whyViral.push('結構直接、主題清晰，適合快速消化');
+    out.innerHTML = `
+      <div class="proposal-section" style="border-color:#f97316;margin-top:10px">
+        <h4>🪝 鉤子（Hook）</h4>
+        <pre class="output-content">${escapeHtml(a.hook)}</pre>
+        <h4 style="margin-top:8px">🧱 內容結構（${a.points.length} 個要點）</h4>
+        <pre class="output-content">${escapeHtml(a.points.join('\n') || '（未偵測到明顯清單，屬敘事／故事型）')}</pre>
+        <h4 style="margin-top:8px">🔑 關鍵詞</h4>
+        <pre class="output-content">${escapeHtml(a.keywords.join('、') || '—')}</pre>
+        <h4 style="margin-top:8px">📣 CTA（互動引導）</h4>
+        <pre class="output-content">${escapeHtml(a.ctas.join('\n') || '（原文冇明顯 CTA，建議洗稿時加返）')}</pre>
+        <h4 style="margin-top:8px">🏷️ 原文標籤（${a.tags.length}）</h4>
+        <pre class="output-content">${escapeHtml(a.tags.join(' ') || '—')}</pre>
+        <h4 style="margin-top:8px">💥 點解會爆</h4>
+        <pre class="output-content">${escapeHtml('• ' + whyViral.join('\n• '))}</pre>
+      </div>
+      <p class="cover-tip">想直接用呢個框架出你自己嘅版本？撳上面「✍️ 洗稿成我風格」。</p>
+    `;
+    return a;
+  }
+
+  function rewriteViral() {
+    const el = document.getElementById('viralInput');
+    const raw = el ? el.value.trim() : '';
+    const out = document.getElementById('viralOut');
+    if (!raw) { alert('請先貼上一篇爆款筆記文案。'); return; }
+    if (!out) return;
+    const a = parseViral(raw);
+    const p = personaProfile;
+    const tone = p.enabled ? p.tone : 'expert';
+    // 換鉤子（保留爆款框架，換成你角度）
+    const topicGuess = a.keywords[0] || '保障規劃';
+    const hookMap = {
+      expert: `【${topicGuess}】專業拆解：多數人都忽略咗嘅重點`,
+      friendly: `講真，${topicGuess}呢家嘢我幫過好多朋友，分享返俾你`,
+      mentor: `如果你都關心${topicGuess}，呢幾點值得你諗清楚`
+    };
+    const newHook = hookMap[tone] || hookMap.expert;
+    // 保留原結構點數，改寫語氣
+    let points = a.points.length ? a.points.map(pt => pt.replace(/^(\d+[\.、)]|[①-⑨]|[1-9]️⃣|[•\-\*]|[✅💡📌👉🔥⭐️])+\s*/, '').trim()).filter(Boolean) : ['點解重要', '常見誤解', '正確做法'];
+    points = points.slice(0, 6);
+    const cta = (p.enabled && p.cta) ? p.cta : '留言「保障」或私訊我，免費幫你檢視現有保障';
+    const tags = suggestTags(topicGuess + raw, 'xhs');
+    const sig = personaSignature();
+    const body = `${newHook}\n\n${points.map((pt, i) => `${i + 1}️⃣ ${pt}`).join('\n')}\n\n💡 ${cta}\n\n👇 想睇更多香港保險乾貨，記得關注～\n\n${tags}${sig ? '\n\n' + sig : ''}`;
+    // 洗稿後自動做一次合規掃描
+    const complianceHits = checkCompliance(body);
+    let cHtml = '';
+    if (complianceHits.length) {
+      cHtml = `<div class="dup-warn" style="background:#fef2f2;border-color:#ef4444;color:#991b1b;margin-top:8px">⚠️ 洗稿版本含 ${complianceHits.reduce((n, h) => n + h.words.length, 0)} 個需注意字眼（${complianceHits.map(h => h.words.join('、')).join('；')}），發佈前請調整。</div>`;
+    } else {
+      cHtml = `<div class="dup-warn" style="background:#ecfdf5;border-color:#10b981;color:#065f46;margin-top:8px">✅ 洗稿版本未發現常見違規字眼。</div>`;
+    }
+    out.innerHTML = `
+      <div class="proposal-section" style="border-color:#22c55e;margin-top:10px">
+        <h4>✍️ 洗稿成果（你嘅風格${p.enabled && p.nick ? '：' + escapeHtml(p.nick) : ''}）</h4>
+        <pre class="output-content" id="viralRewrite">${escapeHtml(body)}</pre>
+        <button class="btn btn-sm btn-ghost copy-btn" onclick="copySingleText('viralRewrite', this)">複製</button>
+      </div>${cHtml}
+      <p class="cover-tip">已保留原爆款框架（鉤子＋清單＋CTA），換成你嘅人設語氣、加咗優化標籤同合規檢查。</p>
+    `;
+    return body;
+  }
+
+  // ======================================================================
+  // E — 批量生成一週內容：一次出 5–7 篇，自動排 series
+  // ======================================================================
+  const ANGLE_SUFFIX = ['懶人包', '常見誤解', '真實個案分享', '2026 最新更新', '點揀先啱自己', '避坑指南', 'Q&A 快問快答'];
+
+  function renderBatchPanel() {
+    const box = document.getElementById('batchPanel');
+    if (!box) return;
+    box.innerHTML = `
+      <label class="form-label">📅 批量生成一週內容（一次出多篇，自動排 EP 系列）</label>
+      <textarea id="batchTopics" class="form-input" rows="3" placeholder="每行一個主題（留空就會用主題欄自動衍生 5 個角度）。例：\n危疾保障常見誤解\n自願醫保扣稅懶人包\n年輕家庭醫療規劃"></textarea>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:13px;color:var(--muted)">篇數</label>
+        <select id="batchCount" class="form-input" style="width:auto">
+          <option value="5">5 篇</option>
+          <option value="6">6 篇</option>
+          <option value="7">7 篇</option>
+        </select>
+        <button class="btn btn-sm btn-primary" onclick="SocialModule.generateWeekBatch()">🚀 一鍵出一週內容</button>
+      </div>
+      <div id="batchOut"></div>
+      <p class="cover-tip">每篇會自動配範本＋EP 編號＋小紅書 caption＋標籤，適合一次過排一週貼文。可逐篇下載圖／複製文案。</p>
+    `;
+  }
+
+  async function generateWeekBatch() {
+    const raw = (document.getElementById('batchTopics') ? document.getElementById('batchTopics').value : '').trim();
+    const count = parseInt((document.getElementById('batchCount') ? document.getElementById('batchCount').value : '5'), 10) || 5;
+    let topics = raw ? raw.split('\n').map(t => t.trim()).filter(Boolean) : [];
+    if (!topics.length) {
+      const seed = (document.getElementById('socialTopic') ? document.getElementById('socialTopic').value : '').trim();
+      if (!seed) { alert('請喺上面「主題」欄填一個主題，或喺呢度逐行輸入多個主題。'); return { ok: false }; }
+      topics = ANGLE_SUFFIX.map(s => `${seed}${s}`);
+    }
+    topics = topics.slice(0, count);
+    while (topics.length < count && raw) topics.push(topics[topics.length % topics.length]);
+
+    const tpls = (typeof COVER_TEMPLATES !== 'undefined' ? COVER_TEMPLATES : []);
+    const seriesName = (seriesState && seriesState.name) ? seriesState.name : '每週保險乾貨';
+    const startEp = (seriesState && seriesState.ep) ? seriesState.ep : 1;
+    const style = document.getElementById('socialStyle') ? document.getElementById('socialStyle').value : 'professional';
+    const persona = personaProfile.enabled ? personaProfile.tone : (document.getElementById('socialPersona') ? document.getElementById('socialPersona').value : 'expert');
+    const sig = personaSignature();
+
+    const out = document.getElementById('batchOut');
+    if (!out) return { ok: false };
+    let html = `<div class="dup-warn" style="background:#eef2ff;border-color:#6366f1;color:#3730a3;margin-top:10px">📅 已生成 <b>${topics.length}</b> 篇（系列：${escapeHtml(seriesName)}，EP.${startEp}–EP.${startEp + topics.length - 1}）。逐篇有小紅書文案＋圖，可下載／複製。</div><div class="mp-grid">`;
+    const items = [];
+    topics.forEach((topic, idx) => {
+      const ep = startEp + idx;
+      const tpl = tpls.length ? tpls[idx % tpls.length] : { id: 'pro-navy', name: '專業' };
+      let cap = buildPlatformCaption(topic, 'xhs', style, persona, '', personaProfile.audience || 'all');
+      if (sig) cap += '\n\n' + sig;
+      items.push({ topic, ep, tpl, cap });
+      html += `
+        <div class="mp-card">
+          <div class="mp-card-title">EP.${ep} · ${escapeHtml(topic)}</div>
+          <div class="cover-wrap"><canvas id="batchCanvas_${idx}" class="social-canvas"></canvas></div>
+          <div class="proposal-section" style="border-color:#6366f1">
+            <h4>✍️ 小紅書文案</h4>
+            <pre class="output-content" id="batchCap_${idx}">${escapeHtml(cap)}</pre>
+            <button class="btn btn-sm btn-ghost copy-btn" onclick="copySingleText('batchCap_${idx}', this)">複製</button>
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="SocialModule.downloadMultiCover('batchCanvas_${idx}','${topic.replace(/[\\/:?%*|<>"']/g, '_')}_EP${ep}')">⬇️ 圖</button>
+        </div>`;
+    });
+    html += `</div><div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-sm btn-secondary" onclick="SocialModule.copyAllBatch(${topics.length})">複製全部文案</button>
+    </div>`;
+    out.innerHTML = html;
+
+    // 畫每篇 canvas（小紅書 3:4）—— 暫時覆寫 seriesState 令每張顯示自己嘅 EP 徽章
+    const savedSeries = Object.assign({}, seriesState);
+    items.forEach((it, idx) => {
+      const cv = document.getElementById('batchCanvas_' + idx);
+      if (!cv) return;
+      cv.width = 1080; cv.height = 1440;
+      const built = buildContent(it.topic, 'xhs', '3:4', style, persona, '', 'post', null, it.tpl);
+      const data = { title: it.topic, tagline: built.hook, points: built.keyPoints };
+      seriesState.active = true; seriesState.ep = it.ep; seriesState.name = seriesName;
+      try { renderCover(cv, it.tpl, data, null); } catch (e) { console.warn(e); }
+    });
+    // 還原 seriesState，再推進 EP
+    seriesState = Object.assign(seriesState, savedSeries);
+    if (seriesState) { seriesState.ep = startEp + topics.length; saveSeries(); }
+    try {
+      Storage.addHistory({ type: 'social', topic: topics[0], platform: 'batch', ratio: '3:4', templateId: 'batch', templateName: seriesName, title: seriesName + ' 批量', caption: items[0] ? items[0].cap : '' });
+      if (typeof updateDashboardStats === 'function') updateDashboardStats();
+    } catch (e) {}
+    return { ok: true, count: topics.length };
+  }
+
+  function copyAllBatch(n) {
+    const parts = [];
+    for (let i = 0; i < n; i++) { const e = document.getElementById('batchCap_' + i); if (e) parts.push('【EP】\n' + e.textContent); }
+    const text = parts.join('\n\n————————\n\n');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => alert('已複製全部 ' + n + ' 篇文案')).catch(() => fallbackCopy(text));
+    else fallbackCopy(text);
+  }
+
+  // ======================================================================
+  // F — 擴展多平台文案：微信朋友圈 / WhatsApp Status / 抖音 / Telegram / LinkedIn
+  // ======================================================================
+  const EXTRA_PLATFORMS = [
+    { key: 'wechat', name: '微信朋友圈' },
+    { key: 'wa', name: 'WhatsApp Status' },
+    { key: 'douyin', name: '抖音' },
+    { key: 'telegram', name: 'Telegram' },
+    { key: 'linkedin', name: 'LinkedIn' }
+  ];
+
+  function buildExtraCaption(topic, key, style, persona) {
+    const T = (typeof TEMPLATES !== 'undefined' ? TEMPLATES : { socialTopics: {} });
+    const match = Object.keys(T.socialTopics).find(k => topic.includes(k) || k.includes(topic));
+    const base = match ? T.socialTopics[match] : null;
+    let hook = base ? base.hooks[0] : `關於${topic}，分享幾個重點`;
+    let points = base ? base.keyPoints : ['點解重要', '常見誤解', '正確做法'];
+    let cta = base ? base.cta : '有興趣了解，隨時搵我';
+    if (personaProfile.enabled && personaProfile.cta) cta = personaProfile.cta;
+    const tags = suggestTags(topic, key === 'douyin' ? 'xhs' : key);
+    const sig = personaSignature();
+    let body;
+    if (key === 'wechat') {
+      body = `${hook}\n\n${points.map(p => `▪️ ${p}`).join('\n')}\n\n${cta}`;
+    } else if (key === 'wa') {
+      // Status 要短
+      body = `${hook}\n👉 ${cta}`;
+    } else if (key === 'douyin') {
+      body = `${hook}\n\n${points.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n\n${cta}\n\n${tags} #抖音 #保險科普`;
+    } else if (key === 'telegram') {
+      body = `📢 ${hook}\n\n${points.map(p => `• ${p}`).join('\n')}\n\n${cta}`;
+    } else { // linkedin
+      body = `${hook}\n\n${points.map(p => `• ${p}`).join('\n')}\n\n身為香港保險從業員，我相信專業規劃能為家庭帶來長遠保障。${cta}\n\n${tags}`;
+    }
+    if (sig) body += '\n\n' + sig;
+    return body;
+  }
+
+  function appendExtraPlatforms(topic) {
+    topic = (topic || (document.getElementById('socialTopic') ? document.getElementById('socialTopic').value : '') || '').trim();
+    if (!topic) { alert('請先填主題。'); return; }
+    const style = document.getElementById('socialStyle') ? document.getElementById('socialStyle').value : 'professional';
+    const persona = personaProfile.enabled ? personaProfile.tone : (document.getElementById('socialPersona') ? document.getElementById('socialPersona').value : 'expert');
+    const mount = document.getElementById('mpExtraOut') || document.getElementById('socialOutput');
+    if (!mount) return;
+    let html = `<div class="dup-warn" style="background:#f0f9ff;border-color:#0ea5e9;color:#075985;margin-top:12px">🌐 更多平台文案（已按各平台特性調整長短／語氣）：</div><div class="mp-grid">`;
+    EXTRA_PLATFORMS.forEach(p => {
+      const cap = buildExtraCaption(topic, p.key, style, persona);
+      html += `
+        <div class="mp-card">
+          <div class="mp-card-title">📱 ${p.name}</div>
+          <div class="proposal-section" style="border-color:#0ea5e9">
+            <pre class="output-content" id="exCap_${p.key}">${escapeHtml(cap)}</pre>
+            <button class="btn btn-sm btn-ghost copy-btn" onclick="copySingleText('exCap_${p.key}', this)">複製</button>
+          </div>
+        </div>`;
+    });
+    html += `</div>`;
+    mount.innerHTML = html;
+    return true;
+  }
+
+  // 獨立按鈕：由主表單直接出更多平台文案
+  function generateExtraPlatforms() {
+    const topic = (document.getElementById('socialTopic') ? document.getElementById('socialTopic').value : '').trim();
+    if (!topic) { alert('請先填「主題」。'); return; }
+    const out = document.getElementById('socialOutput');
+    if (out) { out.className = 'output-box filled'; out.innerHTML = '<div id="mpExtraOut"></div>'; }
+    appendExtraPlatforms(topic);
+  }
+
   window.generateSocialContent = generate;
-  window.SocialModule = { init, rerenderWithSelected, markPublished, saveRedFoxKey, saveImageGenKey, toggleAiBackground, searchTrendTemplates, applyTrend, useAiAvatar, clearAvatar, toggleSeries, openInCanva, generateMultiPlatform, generateRealistic, downloadMultiCover, openMultiInCanva, copyAllMulti };
+  window.SocialModule = {
+    init, rerenderWithSelected, markPublished, saveRedFoxKey, saveImageGenKey, toggleAiBackground,
+    searchTrendTemplates, applyTrend, useAiAvatar, clearAvatar, toggleSeries, openInCanva,
+    generateMultiPlatform, generateRealistic, downloadMultiCover, openMultiInCanva, copyAllMulti,
+    // A–F 小紅書強化
+    savePersona, generateTags, scanCompliance, scanCurrentOutput,
+    analyzeViral, rewriteViral, generateWeekBatch, copyAllBatch,
+    appendExtraPlatforms, generateExtraPlatforms
+  };
   // 測試用內部 hook（唔影響一般用戶）
   window.SocialModule.__test = {
     renderCover,
     setSeries: (s) => { seriesState = Object.assign(seriesState, s); },
-    setAvatar: (img) => { avatarImage = img; }
+    setAvatar: (img) => { avatarImage = img; },
+    setPersona: (p) => { personaProfile = Object.assign(personaProfile, p); },
+    personaSignature,
+    suggestTags,
+    checkCompliance,
+    parseViral,
+    rewriteViralText: (raw) => { const el = document.getElementById('viralInput'); if (el) el.value = raw; return rewriteViral(); },
+    buildExtraCaption,
+    COMPLIANCE_RULES,
+    EXTRA_PLATFORMS
   };
 })();

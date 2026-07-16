@@ -17,6 +17,18 @@ const SetModule = (() => {
 
   const agents = [
     {
+      id: 'assistant',
+      name: 'SET AI 私人助理',
+      desc: 'SET AI 私人助理：你嘅全能保險工作助理。直接用廣東話落指令，就會幫你生成社交貼文、Proposal、Follow-Up、見客準備、客戶分析——唔使入後台慢慢填表，講一句就搞掂。',
+      author: 'SET',
+      uses: '∞',
+      hero: true,
+      color: '#4f46e5',
+      icon: ICONS.star,
+      welcome: '你好，我係 SET AI 私人助理 ⚡\n\n你直接好似叫私人助理咁落指令就得，例如：\n• 「幫我出 3 個小紅書理財 post，主題自願醫保扣稅」\n• 「幫陳生準備一個危疾 proposal」\n• 「寫個 follow-up 俾而家諗緊嘅客」\n• 「幫我準備聽日見李太嘅 meeting brief」\n• 「寫實封面：家庭財務規劃」\n\n唔使慢慢填表，講一句我就幫你用 OS 平台完成內容。你想做咩先？',
+      chips: ['出 3 平台社交貼文', '寫實 AI 封面', '準備 proposal', '寫 follow-up', '準備見客 brief', '分析客戶保障']
+    },
+    {
       id: 'negotiation',
       name: 'SET全能顧問',
       desc: 'SET全能顧問：一個 agent 包晒六大範疇——VHIS 自願醫保、人壽危疾、ECI 勞工保險、MPF/TVC 轉化、新員工 Onboarding，外加內地客專項（見面困難、開 case 話術、內地市場知識）。幫你制定談判策略、拆解客戶底牌、模擬簽單對話。',
@@ -112,7 +124,7 @@ const SetModule = (() => {
     list.innerHTML = '';
     const term = (filter || '').toLowerCase().trim();
     // 用家回饋：淨保留「SET全能顧問」一個入口，其他專家暫時隱藏
-    const filtered = agents.filter(a => a.id === 'negotiation' && (!term || a.name.toLowerCase().includes(term) || a.desc.toLowerCase().includes(term)));
+    const filtered = agents.filter(a => (a.id === 'negotiation' || a.id === 'assistant') && (!term || a.name.toLowerCase().includes(term) || a.desc.toLowerCase().includes(term)));
     filtered.forEach(a => {
       const card = document.createElement('div');
       card.className = 'agent-card fade-in' + (a.hero ? ' badge-hero' : '');
@@ -423,6 +435,169 @@ const SetModule = (() => {
     return content.trim() || '(API 冇回應內容)';
   }
 
+  // ===== AI 私人助理（function calling + 離線路由）=====
+  const ASSISTANT_TOOLS = [
+    { type: 'function', function: { name: 'social_create', description: '根據主題一次過生成 Instagram、小紅書、Facebook 三個平台的貼文文案同封面圖（自動轉去社交內容引擎頁）', parameters: { type: 'object', properties: { topic: { type: 'string', description: '貼文主題，例如「自願醫保扣稅懶人包」' }, style: { type: 'string', enum: ['professional','casual','educational','storytelling'], description: '文案風格' }, persona: { type: 'string', enum: ['expert','friendly','mentor'], description: '人設' }, audience: { type: 'string', enum: ['hk','cn','all'], description: 'hk=香港觀眾, cn=內地觀眾, all=兩者都做' }, realistic: { type: 'boolean', description: 'true=用 AI 生成寫實家庭/香港天際線背景（似片中專業美工）' } }, required: ['topic'] } } },
+    { type: 'function', function: { name: 'proposal_create', description: '開啟 Proposal 引擎並填好標題/客戶，等用家補產品', parameters: { type: 'object', properties: { title: { type: 'string' }, client: { type: 'string' }, product: { type: 'string' }, purpose: { type: 'string', enum: ['client','couple','family'] } }, required: [] } } },
+    { type: 'function', function: { name: 'followup_create', description: '開啟 Follow-Up 生成器並填好客戶/階段/語氣', parameters: { type: 'object', properties: { client: { type: 'string' }, stage: { type: 'string', enum: ['first','thinking','ghosted','proposal-sent','objection','close'] }, tone: { type: 'string', enum: ['professional','casual','gentle','urgent'] }, product: { type: 'string' } }, required: [] } } },
+    { type: 'function', function: { name: 'meeting_create', description: '開啟見客準備並填好客戶/目的/時長', parameters: { type: 'object', properties: { client: { type: 'string' }, purpose: { type: 'string', enum: ['first','proposal','followup','review'] }, duration: { type: 'string', enum: ['30','60','90'] } }, required: [] } } },
+    { type: 'function', function: { name: 'client_analyze', description: '開啟客戶分析並填好基本資料', parameters: { type: 'object', properties: { name: { type: 'string' }, age: { type: 'string' }, job: { type: 'string' }, income: { type: 'string' }, marital: { type: 'string', enum: ['single','married','divorced'] }, kids: { type: 'string' } }, required: [] } } }
+  ];
+
+  function assistantSystem() {
+    return '你係「SET AI 私人助理」，一個為香港保險經紀（Manulife HK 持牌）而設嘅全能工作助理，嵌入喺 Agent OS AI 工作台。\n\n你的能力（用 function calling 自動執行）：\n1. social_create — 一次過生成 IG / 小紅書 / Facebook 三平台貼文同封面圖\n2. proposal_create — 開 Proposal 引擎\n3. followup_create — 開 Follow-Up 生成器\n4. meeting_create — 開見客準備\n5. client_analyze — 開客戶分析\n\n規則：\n- 用繁體中文（粵語口吻）回答，簡潔、實用。\n- 當用家想做具體工作（出 post、寫 proposal、跟進、見客準備、分析客戶），優先 call 對應 tool，唔好淨係講。\n- 涉及金額要準確（VHIS 扣稅上限 HK$8,000/人、TVC HK$60,000/年）。\n- 唔好講「保證回報」等違規字眼；國內平台對保險業有限制，內容要合規、避免敏感字眼。\n- 正式發佈前提醒用家自己再檢查一次。';
+  }
+
+  function extractTopic(text) {
+    const T = (typeof TEMPLATES !== 'undefined' && TEMPLATES.socialTopics) ? TEMPLATES.socialTopics : {};
+    for (const k of Object.keys(T)) if (text.indexOf(k) >= 0) return k;
+    const m = text.match(/(?:主題|關於|講|出|生成|generate|做)\s*[:：]?\s*([^\n，,。.\n]{2,20})/);
+    if (m) return m[1].trim();
+    return null;
+  }
+  function extractArgs(text) {
+    const a = {};
+    const clientM = text.match(/(?:客戶|客|幫)\s*[:：]?\s*([^\s，,。.]{1,8}?)(?:嘅|的|準備|做|寫|生成|proposal|follow|brief|分析|見)/);
+    if (clientM) a.client = clientM[1].replace(/[嘅的]/g, '');
+    const prodM = text.match(/(?:產品|推|講)\s*[:：]?\s*([^\s，,。.]{1,12}?)(?:保|險|計劃|產品)/);
+    if (prodM) a.product = prodM[1];
+    const nameM = text.match(/([^\s，,。.]{1,6}?)(?:先生|小姐|女士|太|生)/);
+    if (nameM) a.name = nameM[1];
+    return a;
+  }
+  function setVal(id, v) { const el = document.getElementById(id); if (el && v) el.value = v; }
+  function activateByClass(cls, val) {
+    document.querySelectorAll('.' + cls).forEach(ch => {
+      if (ch.dataset && ch.dataset.val === val) ch.classList.add('active');
+      else if (ch.dataset && ch.dataset.val) ch.classList.remove('active');
+    });
+  }
+  function prefillProposal(a) {
+    setVal('propTitle', a.title || (a.client ? a.client + ' 建議書' : ''));
+    if (a.client) { const s = document.getElementById('propClientSelect'); if (s) { for (const o of s.options) { if (a.client && o.text && o.text.indexOf(a.client) >= 0) { s.value = o.value; break; } } } }
+  }
+  function prefillFollowup(a) {
+    setVal('fuClient', a.client || '');
+    setVal('fuProduct', a.product || '');
+    if (a.stage) activateByClass('fu-stage', a.stage);
+    if (a.tone) setVal('fuTone', a.tone);
+  }
+  function prefillMeeting(a) {
+    if (a.client) { const s = document.getElementById('meetClientSelect'); if (s) { for (const o of s.options) { if (a.client && o.text && o.text.indexOf(a.client) >= 0) { s.value = o.value; break; } } } }
+    if (a.purpose) activateByClass('meet-purpose-chip', a.purpose);
+  }
+  function prefillClient(a) {
+    setVal('cName', a.name || a.client || '');
+    setVal('cAge', a.age || '');
+    setVal('cJob', a.job || '');
+    setVal('cIncome', a.income || '');
+    setVal('cMarital', a.marital || '');
+    setVal('cKids', a.kids || '');
+  }
+
+  async function execAssistantTool(name, args) {
+    try {
+      if (name === 'social_create') {
+        const topic = args.topic || (document.getElementById('socialTopic') ? document.getElementById('socialTopic').value : '') || '家庭財務規劃';
+        navigateTo('social');
+        const r = await SocialModule.generateMultiPlatform({ topic: topic, style: args.style, persona: args.persona, audience: args.audience, realistic: !!args.realistic });
+        return { ok: true, action: 'social_create', topic: topic, platforms: ['Instagram', '小紅書', 'Facebook'] };
+      }
+      if (name === 'proposal_create') { navigateTo('proposal'); prefillProposal(args); return { ok: true, action: 'proposal_create' }; }
+      if (name === 'followup_create') { navigateTo('followup'); prefillFollowup(args); return { ok: true, action: 'followup_create' }; }
+      if (name === 'meeting_create') { navigateTo('meeting'); prefillMeeting(args); return { ok: true, action: 'meeting_create' }; }
+      if (name === 'client_analyze') { navigateTo('client'); prefillClient(args); return { ok: true, action: 'client_analyze' }; }
+      return { ok: false, error: 'unknown tool ' + name };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+
+  async function assistantLLM(text) {
+    const cfg = getLLMConfig();
+    const messages = [{ role: 'system', content: assistantSystem() }];
+    conversation.forEach(m => { if (m.role === 'user' || m.role === 'assistant') messages.push({ role: m.role, content: m.content }); });
+    messages.push({ role: 'user', content: text });
+    const base = (cfg.baseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
+    const mk = (msgs, tools) => fetch(base + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apiKey },
+      body: JSON.stringify({ model: cfg.model, messages: msgs, tools: tools || undefined, tool_choice: tools ? 'auto' : undefined, temperature: 0.5 })
+    });
+    let res = await mk(messages, ASSISTANT_TOOLS);
+    if (!res.ok) { let e = 'API ' + res.status; try { const j = await res.json(); if (j.error && j.error.message) e += ': ' + j.error.message; } catch (_) {} throw new Error(e); }
+    const data = await res.json();
+    const msg = data.choices && data.choices[0] && data.choices[0].message;
+    if (msg && msg.tool_calls && msg.tool_calls.length) {
+      addBotMessage('⏳ 幫你用 OS 平台搞緊…');
+      let anyNav = false;
+      const toolResults = [];
+      for (const tc of msg.tool_calls) {
+        let args = {};
+        try { args = JSON.parse(tc.function.arguments || '{}'); } catch (_) {}
+        const result = await execAssistantTool(tc.function.name, args);
+        if (tc.function.name === 'social_create') anyNav = true;
+        toolResults.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) });
+      }
+      const msgs2 = messages.slice();
+      msgs2.push({ role: 'assistant', content: msg.content || '', tool_calls: msg.tool_calls });
+      toolResults.forEach(r => msgs2.push(r));
+      msgs2.push({ role: 'user', content: '請用繁體中文（粵語口吻）簡短確認你剛才做咗啲咩，同下一步建議（唔使重複工具結果細節）。' });
+      let summary = text;
+      try {
+        const res2 = await mk(msgs2, null);
+        if (res2.ok) { const d2 = await res2.json(); summary = (d2.choices && d2.choices[0] && d2.choices[0].message && d2.choices[0].message.content) || summary; }
+      } catch (_) {}
+      return (summary.trim() || '搞掂！') + (anyNav ? '\n\n（已轉去「社交內容引擎」頁，睇 3 平台結果）' : '');
+    }
+    return (msg && msg.content ? msg.content : '').trim() || '(無回應)';
+  }
+
+  async function assistantOffline(text) {
+    const t = text.toLowerCase();
+    const isSocial = /小紅書|xiaohongshu|ig|instagram|facebook|fb|帖文|貼文|貼|post|社交|封面|圖|content|發/.test(t);
+    if (isSocial) {
+      const topic = extractTopic(text) || (document.getElementById('socialTopic') ? document.getElementById('socialTopic').value : '') || '家庭財務規劃';
+      const audience = /內地|cn|大陆|中國|内地/.test(t) ? 'cn' : (/香港|hk/.test(t) ? 'hk' : 'all');
+      const style = /專業|professional/.test(t) ? 'professional' : /故事|story/.test(t) ? 'storytelling' : /教育|education/.test(t) ? 'educational' : /親切|casual|貼地/.test(t) ? 'casual' : 'professional';
+      const realistic = /寫實|realistic|專業美工|片中美工/.test(t);
+      addBotMessage('⏳ 幫你一次過生成 Instagram / 小紅書 / Facebook 三個版本…' + (realistic ? '（寫實 AI 封面）' : ''));
+      await SocialModule.generateMultiPlatform({ topic: topic, audience: audience, style: style, realistic: realistic });
+      return '✅ 搞掂！已經幫你出咗 3 個平台版本（Instagram 1:1 / 小紅書 3:4 / Facebook 1.91:1），自動轉咗去「社交內容引擎」頁睇結果，每張圖下面有「⬇️ 圖」同「🎨 Canva」。\n\n想再調就喺個頁改主題再撳；「寫實 AI 封面」掣會用 AI 幫你畫家庭／香港天際線背景。';
+    }
+    if (/proposal|建議書|建議/.test(t)) { navigateTo('proposal'); prefillProposal(extractArgs(text)); return '✅ 已開啟 Proposal 引擎，幫你填好標題／客戶。補返想推介嘅產品，撳「生成建議書框架」就得。想我直接寫，俾我：客戶名 + 產品 + 目的。'; }
+    if (/follow|跟進|跟上/.test(t) && /whatsapp|訊息|message|客|跟/.test(t)) { navigateTo('followup'); prefillFollowup(extractArgs(text)); return '✅ 已開啟 Follow-Up 生成器。揀返階段同語氣，就出 WhatsApp 訊息。'; }
+    if (/見客|meeting|brief|準備|約見|見面/.test(t)) { navigateTo('meeting'); prefillMeeting(extractArgs(text)); return '✅ 已開啟見客準備，幫你填好目的同時長。揀客戶撳「生成 Meeting Flow」就得。'; }
+    if (/客戶|分析|保障缺口|client|風險/.test(t)) { navigateTo('client'); prefillClient(extractArgs(text)); return '✅ 已開啟客戶分析，填入資料就自動分析保障缺口同風險重點。'; }
+    return fallbackReply(text) + '\n\n（想我做實際嘢，可以講：出社交貼文 / 準備 proposal / 寫 follow-up / 準備見客 brief / 分析客戶）';
+  }
+
+  async function sendAssistant(text) {
+    conversation.push({ role: 'user', content: text });
+    const cfg = getLLMConfig();
+    const privacy = getPrivacyMode();
+    // 空 key pre-check（同 SET 其他 agent 一致，避免 user 見到 401）
+    if (cfg.provider === 'openai' && !cfg.apiKey) {
+      const reply = '⚠️ 你仲未填 API Key。\n\n請按右上角 ⚙️ 設定 → 撳「NVIDIA」或「OpenRouter」preset 掣 → 喺「API Key」一欄貼你嘅 key → 再撳「保存設定」後重新發送。\n\n* NVIDIA NIM（免費無限）→ https://build.nvidia.com → 註冊 → Settings → API Keys\n* OpenRouter（免費模型）→ https://openrouter.ai/keys → 註冊拎 key\n\n（冇 key 都唔緊要，我可以暫時用離線助理幫你做基本嘢。）';
+      conversation.push({ role: 'assistant', content: reply });
+      removeTyping();
+      addBotMessage(reply);
+      isBotTyping = false;
+      const sb = $('setSendBtn'); if (sb) sb.disabled = false;
+      return;
+    }
+    let reply;
+    try {
+      if (cfg.provider === 'mock' || privacy) reply = await assistantOffline(text);
+      else reply = await assistantLLM(text);
+    } catch (e) {
+      reply = (await assistantOffline(text)) + '\n\n⚠️ 真 LLM 失敗（' + e.message + '），已用離線助理。';
+    }
+    conversation.push({ role: 'assistant', content: reply });
+    removeTyping();
+    addBotMessage(reply);
+    isBotTyping = false;
+    const sb = $('setSendBtn'); if (sb) sb.disabled = false;
+  }
+
   async function sendUserText(text) {
     if (isBotTyping) return;
     addUserMessage(text);
@@ -430,6 +605,11 @@ const SetModule = (() => {
     isBotTyping = true;
     $('setSendBtn').disabled = true;
     showTyping();
+    // AI 私人助理：委派去專屬處理（function calling / 離線路由）
+    if (currentAgent && currentAgent.id === 'assistant') {
+      await sendAssistant(text);
+      return;
+    }
     const cfg = getLLMConfig();
     const privacy = getPrivacyMode();   // 敏感模式：強制離線，唔出雲端
     let reply;

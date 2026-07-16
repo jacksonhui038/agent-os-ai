@@ -384,8 +384,8 @@
       ctx.globalAlpha = 0.92;
       ctx.drawImage(bgImage, dx, dy, dw, dh);
       ctx.globalAlpha = 1;
-      // 加暗色遮罩令文字清晰
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      // 加暗色遮罩令文字清晰（寫實風格用更淡遮罩，畀 AI 圖透出嚟）
+      ctx.fillStyle = 'rgba(0,0,0,' + (tpl.layout === 'photo' ? 0.22 : 0.35) + ')';
       ctx.fillRect(0, 0, W, H);
     } else {
       // 背景漸變
@@ -404,7 +404,7 @@
       ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, W - ctx.lineWidth, H - ctx.lineWidth);
     }
 
-    drawDecor(ctx, tpl, W, H);
+    if (tpl.decor && tpl.decor !== 'none' && tpl.layout !== 'photo') drawDecor(ctx, tpl, W, H);
 
     // 預先計算常用尺寸
     const pad = W * 0.07;
@@ -419,10 +419,61 @@
     else if (tpl.layout === 'compare') renderCompareLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
     else if (tpl.layout === 'comic') renderComicLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
     else if (tpl.layout === 'cute') renderCuteLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
+    else if (tpl.layout === 'photo') renderPhotoLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
     else renderDefaultLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
 
     // 系列 EP 徽章（所有風格通用，右上角）
     drawSeriesBadge(ctx, tpl, W, H, pad, titleSize, font);
+  }
+
+  // 寫實大片佈局（photo）：極簡大字，畀 AI 背景透出嚟，似片中美工
+  function renderPhotoLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
+    const cx = W / 2;
+    const wide = W > H * 1.4; // FB 橫幅比例
+    const tSize = Math.round(base * (wide ? 0.13 : 0.115));
+    const tagSize = Math.round(base * (wide ? 0.05 : 0.058));
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    let y = H * (wide ? 0.36 : 0.30);
+
+    ctx.fillStyle = tpl.titleColor || '#ffffff';
+    ctx.font = font(tpl.titleWeight || 900, tSize);
+    const titleLines = wrapText(ctx, data.title || '', tSize, W - pad * 2, 2);
+    titleLines.forEach((ln, i) => ctx.fillText(ln, cx, y + i * tSize * 1.06));
+    y += titleLines.length * tSize * 1.06;
+
+    if (data.tagline) {
+      ctx.fillStyle = tpl.subColor || '#e6eefb';
+      ctx.font = font(500, tagSize);
+      const subLines = wrapText(ctx, data.tagline, tagSize, W - pad * 2.2, 2);
+      subLines.forEach((ln, i) => ctx.fillText(ln, cx, y + tagSize * 0.7 + i * tagSize * 1.08));
+      y += subLines.length * tagSize * 1.08 + tagSize * 0.3;
+    }
+
+    // 直式 / 方形：底部排 2-3 個金點重點；橫幅就唔出（留白）
+    if (!wide && data.points && data.points.length) {
+      const pts = data.points.slice(0, 3);
+      const pl = Math.round(base * 0.046);
+      pts.forEach((p, i) => {
+        const ly = H - pad * 1.0 - (pts.length - 1 - i) * base * 0.062;
+        ctx.fillStyle = tpl.accent || '#f5c518';
+        ctx.beginPath(); ctx.arc(cx - base * 0.21, ly, base * 0.011, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = tpl.bulletColor || '#f0f4fb';
+        ctx.font = font(600, pl);
+        ctx.textAlign = 'left';
+        const txt = (wrapText(ctx, p, pl, W * 0.40, 1)[0] || p);
+        ctx.fillText(txt, cx - base * 0.19, ly);
+        ctx.textAlign = 'center';
+      });
+    }
+
+    if (tpl.footer && tpl.footer.text) {
+      ctx.textAlign = 'left';
+      ctx.font = font(500, Math.round(W * 0.026));
+      ctx.fillStyle = tpl.footer.color || 'rgba(255,255,255,0.85)';
+      ctx.fillText(tpl.footer.text, pad, H - pad * 0.7);
+    }
+    ctx.textAlign = 'left';
   }
 
   // 預設佈局（原有邏輯）
@@ -1288,6 +1339,159 @@
     }
   }
 
+  // ===== 一鍵出 3 平台（IG / 小紅書 / FB）=====
+  const MULTI_PLATFORMS = [
+    { key: 'ig',  name: 'Instagram', dims: { w: 1080, h: 1080 }, ratioTxt: '1:1 方形' },
+    { key: 'xhs', name: '小紅書',    dims: { w: 1080, h: 1440 }, ratioTxt: '3:4 直式' },
+    { key: 'fb',  name: 'Facebook',  dims: { w: 1200, h: 630 },  ratioTxt: '1.91:1 橫幅' }
+  ];
+
+  // 寫實 AI 背景 prompt（似片中美工：家庭 / 香港天際線 / 專業金融）
+  function realisticPrompt(topic, realistic) {
+    if (realistic) {
+      return `Ultra-realistic commercial photograph, Hong Kong finance and insurance theme: a happy multicultural family or a confident Asian financial advisor in a bright modern office with Victoria Harbour skyline through the window, warm cinematic natural lighting, premium advertising style, clean composition with generous negative space at top and bottom for text overlay, no text, no watermark, high detail, 8k`;
+    }
+    return `A clean professional social media background about ${topic}, Hong Kong finance and insurance, modern, bright, no text, no watermark, suitable for bold Chinese title overlay`;
+  }
+
+  // 平台專屬 caption（長短 / 語氣按平台調整）
+  function buildPlatformCaption(topic, key, style, persona, extra, audience) {
+    const T = (typeof TEMPLATES !== 'undefined' ? TEMPLATES : { socialTopics: {} });
+    const match = Object.keys(T.socialTopics).find(k => topic.includes(k) || k.includes(topic));
+    const base = match ? T.socialTopics[match] : null;
+    const personaName = { expert: '資深顧問', friendly: '鄰家朋友', mentor: '導師' }[persona] || '顧問';
+    let hook, points, cta, tags;
+    if (base) { hook = base.hooks[0]; points = base.keyPoints; cta = base.cta; tags = base.hashtags; }
+    else {
+      hook = { professional: `【${topic}】專業分析：點樣做出明智決定`, casual: `講真，${topic}呢家嘢好多人都諗錯咗`, educational: `關於${topic}，你需要知道嘅 3 件事`, storytelling: `幫客做${topic}嘅真實個案分享` }[style] || `關於${topic}`;
+      points = ['點解重要？', '常見錯誤', '點樣正確做'];
+      cta = '有疑問隨時 PM 我 💬';
+      tags = '#香港保險 #理財 #保障規劃';
+    }
+    if (extra) cta = cta + `（${extra}）`;
+
+    if (key === 'ig') {
+      return `${hook}\n\n${points.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n\n${cta}\n\n${tags}`;
+    }
+    if (key === 'xhs') {
+      const kw = match || '資料';
+      const body = `${hook}\n\n好多朋友問點解要關注${topic}，我整理咗重點：\n\n${points.map((p, i) => `${i + 1}️⃣ ${p}`).join('\n')}\n\n💡 ${cta}\n\n👇 想知多啲，留言「${kw}」或者關注我，持續分享香港保險乾貨～`;
+      return `${body}\n\n${tags} #小紅書保險 #香港生活 #理財筆記`;
+    }
+    // fb：專業段落
+    return `📌 ${hook}\n\n${points.map((p, i) => `• ${p}`).join('\n')}\n\n${cta}\n\n${tags}`;
+  }
+
+  async function generateMultiPlatform(opts) {
+    opts = opts || {};
+    const topicEl = document.getElementById('socialTopic');
+    const topic = (opts.topic || (topicEl ? topicEl.value : '') || '').trim();
+    if (!topic) { alert('請先填寫「主題」，或喺 AI 私人助理輸入時提供主題。'); return { ok: false }; }
+
+    const style = opts.style || (document.getElementById('socialStyle') ? document.getElementById('socialStyle').value : 'professional');
+    const persona = opts.persona || (document.getElementById('socialPersona') ? document.getElementById('socialPersona').value : 'expert');
+    const extra = opts.extra || (document.getElementById('socialExtra') ? document.getElementById('socialExtra').value : '');
+    const audience = opts.audience || 'all';
+    const realistic = !!opts.realistic;
+    const tplId = realistic ? 'photo-clean' : (opts.templateId || state.templateId || 'pro-navy');
+    const tpl = (typeof COVER_TEMPLATES !== 'undefined' ? COVER_TEMPLATES : []).find(x => x.id === tplId) || COVER_TEMPLATES[0];
+
+    // AI 背景：一次生成，3 平台重用（慳 token）
+    let bgImage = null;
+    if (getUseAiBackground() && getImageGenKey()) {
+      try {
+        const url = await generateAiImage(realisticPrompt(topic, realistic));
+        bgImage = await loadImage(url);
+      } catch (e) { console.warn('AI 背景生成失敗，用漸變底：', e); }
+    }
+
+    // 共用大字（標題 / 副標題 / 重點）畫圖；caption 按平台分開
+    const built = buildContent(topic, 'fb', '1:1', style, persona, extra, state.type, null, tpl);
+    const data = { title: topic, tagline: built.hook, points: built.keyPoints };
+    const captions = {};
+    MULTI_PLATFORMS.forEach(p => { captions[p.key] = buildPlatformCaption(topic, p.key, style, persona, extra, audience); });
+
+    const out = document.getElementById('socialOutput');
+    if (!out) return { ok: false };
+    out.className = 'output-box filled';
+
+    let html = `<div class="dup-warn" style="background:#eef2ff;border-color:#6366f1;color:#3730a3">🚀 已一次過生成 <b>Instagram / 小紅書 / Facebook</b> 三個平台版本，各自獨立尺寸同文案長短。每張圖下有「⬇️ 圖」同「🎨 Canva」。</div><div class="mp-grid">`;
+    MULTI_PLATFORMS.forEach(p => {
+      html += `
+        <div class="mp-card">
+          <div class="mp-card-title">📸 ${p.name} · ${p.ratioTxt}</div>
+          <div class="cover-wrap"><canvas id="mpCanvas_${p.key}" class="social-canvas"></canvas></div>
+          <div class="proposal-section" style="border-color:#6366f1">
+            <h4>✍️ ${p.name} 文案</h4>
+            <pre class="output-content" id="mpCap_${p.key}">${escapeHtml(captions[p.key])}</pre>
+            <button class="btn btn-sm btn-ghost copy-btn" onclick="copySingleText('mpCap_${p.key}', this)">複製</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-sm btn-primary" onclick="SocialModule.downloadMultiCover('mpCanvas_${p.key}','${topic.replace(/[\\/:?%*|<>"']/g, '_')}_${p.key}')">⬇️ 圖</button>
+            <button class="btn btn-sm btn-secondary" onclick="SocialModule.openMultiInCanva('${p.key}')">🎨 Canva</button>
+          </div>
+        </div>`;
+    });
+    html += `</div><div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-sm btn-secondary" onclick="SocialModule.copyAllMulti()">複製全部文案</button></div>`;
+    out.innerHTML = html;
+
+    // 畫 3 張 canvas
+    MULTI_PLATFORMS.forEach(p => {
+      const cv = document.getElementById('mpCanvas_' + p.key);
+      if (!cv) return;
+      cv.width = p.dims.w; cv.height = p.dims.h;
+      try { renderCover(cv, tpl, data, bgImage); } catch (e) { console.warn(e); }
+    });
+
+    try {
+      Storage.addHistory({ type: 'social', topic, platform: 'multi', ratio: 'mixed', templateId: tpl.id, templateName: tpl.name, title: topic, caption: captions.ig });
+      if (typeof updateDashboardStats === 'function') updateDashboardStats();
+    } catch (e) {}
+
+    return { ok: true, captions, topic, realistic };
+  }
+
+  // 寫實 AI 封面（似片中美工）：自動開 AI 背景 + photo-clean 範本，出 3 平台
+  async function generateRealistic() {
+    const topicEl = document.getElementById('socialTopic');
+    if (topicEl && !topicEl.value.trim()) topicEl.value = '家庭財務規劃';
+    if (getImageGenKey()) setUseAiBackground(true);
+    return generateMultiPlatform({ realistic: true });
+  }
+
+  window.downloadMultiCover = function (canvasId, name) {
+    const cv = document.getElementById(canvasId);
+    if (!cv) return;
+    const a = document.createElement('a');
+    a.download = `SET_${(name || 'cover').replace(/[\\/:?%*|<>"']/g, '_')}.png`;
+    a.href = cv.toDataURL('image/png');
+    a.click();
+  };
+
+  function openMultiInCanva(key) {
+    const dims = { ig: { w: 1080, h: 1080 }, xhs: { w: 1080, h: 1440 }, fb: { w: 1200, h: 630 } }[key] || { w: 1080, h: 1080 };
+    const cv = document.getElementById('mpCanvas_' + key);
+    if (cv) { const a = document.createElement('a'); a.download = 'SET_cover.png'; a.href = cv.toDataURL('image/png'); a.click(); }
+    window.open(`https://www.canva.com/design?create&width=${dims.w}&height=${dims.h}`, '_blank');
+    showCanvaTip();
+  }
+
+  function copyAllMulti() {
+    const parts = [];
+    MULTI_PLATFORMS.forEach(p => {
+      const el = document.getElementById('mpCap_' + p.key);
+      if (el) parts.push('【' + p.name + '】\n' + el.textContent);
+    });
+    const text = parts.join('\n\n————————\n\n');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => alert('已複製全部 3 平台文案')).catch(() => fallbackCopy(text));
+    else fallbackCopy(text);
+  }
+  function fallbackCopy(text) {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); alert('已複製全部 3 平台文案'); } catch (e) { alert('複製失敗，請手動選取'); }
+    document.body.removeChild(ta);
+  }
+
   function buildContent(topic, platform, ratio, style, persona, extra, type, dupMsg, tpl) {
     const key = Object.keys(TEMPLATES.socialTopics).find(k => topic.includes(k) || k.includes(topic));
     const tplMatch = key ? TEMPLATES.socialTopics[key] : null;
@@ -1606,7 +1810,7 @@
   }
 
   window.generateSocialContent = generate;
-  window.SocialModule = { init, rerenderWithSelected, markPublished, saveRedFoxKey, saveImageGenKey, toggleAiBackground, searchTrendTemplates, applyTrend, useAiAvatar, clearAvatar, toggleSeries, openInCanva };
+  window.SocialModule = { init, rerenderWithSelected, markPublished, saveRedFoxKey, saveImageGenKey, toggleAiBackground, searchTrendTemplates, applyTrend, useAiAvatar, clearAvatar, toggleSeries, openInCanva, generateMultiPlatform, generateRealistic, downloadMultiCover, openMultiInCanva, copyAllMulti };
   // 測試用內部 hook（唔影響一般用戶）
   window.SocialModule.__test = {
     renderCover,

@@ -154,3 +154,61 @@
   border-color: #22c55e;
   color: #fff;
 }
+
+/* ===== 一鍵出 3 平台 grid ===== */
+.mp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin: 8px 0 4px;
+}
+.mp-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mp-card-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--navy);
+}
+.mp-card .social-canvas {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(0,0,0,.08);
+  background: #0b1f3a;
+}
+
+/* ===== 一鍵出 3 平台 grid ===== */
+.mp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin: 8px 0 4px;
+}
+.mp-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mp-card-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--navy);
+}
+.mp-card .social-canvas {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(0,0,0,.08);
+  background: #0b1f3a;
+}

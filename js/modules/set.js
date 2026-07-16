@@ -17,28 +17,16 @@ const SetModule = (() => {
 
   const agents = [
     {
-      id: 'assistant',
-      name: 'SET AI 私人助理',
-      desc: 'SET AI 私人助理：你嘅全能保險工作助理。直接用廣東話落指令，就會幫你生成社交貼文、Proposal、Follow-Up、見客準備、客戶分析——唔使入後台慢慢填表，講一句就搞掂。',
+      id: 'negotiation',
+      name: 'SET全能顧問',
+      desc: 'SET全能顧問：一個 agent 包晒六大範疇——VHIS 自願醫保、人壽危疾、ECI 勞工保險、MPF/TVC 轉化、新員工 Onboarding，外加內地客專項。同時佢亦係你嘅 AI 私人助理：直接落指令，就會幫你一次過出 3 平台社交貼文（IG/小紅書/FB）、寫 proposal、follow-up、見客 brief、客戶分析——唔使入後台慢慢填表，講一句就搞掂。',
       author: 'SET',
       uses: '∞',
       hero: true,
-      color: '#4f46e5',
-      icon: ICONS.star,
-      welcome: '你好，我係 SET AI 私人助理 ⚡\n\n你直接好似叫私人助理咁落指令就得，例如：\n• 「幫我出 3 個小紅書理財 post，主題自願醫保扣稅」\n• 「幫陳生準備一個危疾 proposal」\n• 「寫個 follow-up 俾而家諗緊嘅客」\n• 「幫我準備聽日見李太嘅 meeting brief」\n• 「寫實封面：家庭財務規劃」\n\n唔使慢慢填表，講一句我就幫你用 OS 平台完成內容。你想做咩先？',
-      chips: ['出 3 平台社交貼文', '寫實 AI 封面', '準備 proposal', '寫 follow-up', '準備見客 brief', '分析客戶保障']
-    },
-    {
-      id: 'negotiation',
-      name: 'SET全能顧問',
-      desc: 'SET全能顧問：一個 agent 包晒六大範疇——VHIS 自願醫保、人壽危疾、ECI 勞工保險、MPF/TVC 轉化、新員工 Onboarding，外加內地客專項（見面困難、開 case 話術、內地市場知識）。幫你制定談判策略、拆解客戶底牌、模擬簽單對話。',
-      author: 'SET',
-      uses: '30+',
-      hero: true,
       color: '#000',
       icon: '<img src="assets/set-logo.jpg" alt="SET" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:1.5px solid var(--gold);background:#000;" />',
-      welcome: '你好，我是SET全能顧問，你嘅全能保險顧問。\n\n我包晒六大範疇：VHIS 自願醫保、人壽危疾、ECI 勞工保險、MPF/TVC 轉化、新員工 Onboarding，仲有內地客專項——見內地客嘅困難、開 case 話術、內地市場消息。無論係要拆客戶底牌、準備開價話術、定係講解某款產品，我都可以幫手。\n\n你想從邊方面開始？',
-      chips: ['分析客戶底牌', '準備開價話術', 'VHIS 稅務扣減', '處理「已有醫保」異議', '向僱主推 ECI', 'MPF 轉化階梯', '見內地客嘅困難', '開 case 破冰話術', '內地市場最新消息']
+      welcome: '你好，我係 SET全能顧問 ⚡\n\n我包晒六大範疇：VHIS 自願醫保、人壽危疾、ECI 勞工保險、MPF/TVC 轉化、新員工 Onboarding，仲有內地客專項（見內地客嘅困難、開 case 話術、內地市場消息）。無論係要拆客戶底牌、準備開價話術、定係講解某款產品，我都可以幫手。\n\n我仲係你嘅 AI 私人助理：直接落指令，我就幫你出 3 平台社交貼文、寫 proposal、follow-up、見客 brief、客戶分析——唔使慢慢填表。例如：\n• 「幫我出 3 個小紅書理財 post」\n• 「幫陳生準備一個危疾 proposal」\n• 「寫個 follow-up 俾而家諗緊嘅客」\n• 「幫我準備聽日見李太嘅 meeting brief」\n• 「寫實封面：家庭財務規劃」\n\n你想從邊方面開始？',
+      chips: ['分析客戶底牌', '準備開價話術', 'VHIS 稅務扣減', '處理「已有醫保」異議', '向僱主推 ECI', '見內地客嘅困難', '出 3 平台社交貼文', '寫實 AI 封面', '準備 proposal', '寫 follow-up', '準備見客 brief', '分析客戶保障']
     },
     {
       id: 'shadow',
@@ -123,8 +111,8 @@ const SetModule = (() => {
     if (!list) return;
     list.innerHTML = '';
     const term = (filter || '').toLowerCase().trim();
-    // 用家回饋：淨保留「SET全能顧問」一個入口，其他專家暫時隱藏
-    const filtered = agents.filter(a => (a.id === 'negotiation' || a.id === 'assistant') && (!term || a.name.toLowerCase().includes(term) || a.desc.toLowerCase().includes(term)));
+    // SET全能顧問已升級成「全能顧問 + AI 私人助理」二合一入口，保留佢一個 hero 卡；其餘專家暫時隱藏
+    const filtered = agents.filter(a => a.id === 'negotiation' && (!term || a.name.toLowerCase().includes(term) || a.desc.toLowerCase().includes(term)));
     filtered.forEach(a => {
       const card = document.createElement('div');
       card.className = 'agent-card fade-in' + (a.hero ? ' badge-hero' : '');
@@ -444,8 +432,8 @@ const SetModule = (() => {
     { type: 'function', function: { name: 'client_analyze', description: '開啟客戶分析並填好基本資料', parameters: { type: 'object', properties: { name: { type: 'string' }, age: { type: 'string' }, job: { type: 'string' }, income: { type: 'string' }, marital: { type: 'string', enum: ['single','married','divorced'] }, kids: { type: 'string' } }, required: [] } } }
   ];
 
-  function assistantSystem() {
-    return '你係「SET AI 私人助理」，一個為香港保險經紀（Manulife HK 持牌）而設嘅全能工作助理，嵌入喺 Agent OS AI 工作台。\n\n你的能力（用 function calling 自動執行）：\n1. social_create — 一次過生成 IG / 小紅書 / Facebook 三平台貼文同封面圖\n2. proposal_create — 開 Proposal 引擎\n3. followup_create — 開 Follow-Up 生成器\n4. meeting_create — 開見客準備\n5. client_analyze — 開客戶分析\n\n規則：\n- 用繁體中文（粵語口吻）回答，簡潔、實用。\n- 當用家想做具體工作（出 post、寫 proposal、跟進、見客準備、分析客戶），優先 call 對應 tool，唔好淨係講。\n- 涉及金額要準確（VHIS 扣稅上限 HK$8,000/人、TVC HK$60,000/年）。\n- 唔好講「保證回報」等違規字眼；國內平台對保險業有限制，內容要合規、避免敏感字眼。\n- 正式發佈前提醒用家自己再檢查一次。';
+  function consultantSystem() {
+    return '你係「SET全能顧問」，一個為香港保險經紀（Manulife HK 持牌）而設嘅全能 AI 顧問，亦係用家嘅私人工作助理，嵌入喺 Agent OS AI 工作台。\n\n你嘅雙重角色：\n（一）保險銷售顧問知識——包晒六大範疇：VHIS 自願醫保、人壽危疾、ECI 勞工保險、MPF/TVC 轉化、新員工 Onboarding，外加內地客專項（見面困難、開 case 話術、內地市場知識）。幫用家制定談判策略、拆解客戶底牌、模擬簽單對話。\n（二）AI 私人助理動作能力（用 function calling 自動執行）：\nsocial_create — 一次過生成 IG / 小紅書 / Facebook 三平台貼文同封面圖\nproposal_create — 開 Proposal 引擎\nfollowup_create — 開 Follow-Up 生成器\nmeeting_create — 開見客準備\nclient_analyze — 開客戶分析\n\n規則：\n- 用繁體中文（粵語口吻）回答，簡潔、實用、可直接出口。\n- 當用家想做具體工作（出 post、寫 proposal、跟進、見客準備、分析客戶），優先 call 對應 tool，唔好淨係講。\n- 當用家想傾保險知識／策略／話術，直接俾專業答案（六大範疇＋內地客專項）。\n- 涉及金額要準確（VHIS 扣稅上限 HK$8,000/人、TVC HK$60,000/年）。\n- 唔好講「保證回報」等違規字眼；國內平台對保險業有限制，內容要合規、避免敏感字眼。\n- 正式發佈前提醒用家自己再檢查一次。';
   }
 
   function extractTopic(text) {
@@ -511,9 +499,9 @@ const SetModule = (() => {
     } catch (e) { return { ok: false, error: e.message }; }
   }
 
-  async function assistantLLM(text) {
+  async function consultantLLM(text) {
     const cfg = getLLMConfig();
-    const messages = [{ role: 'system', content: assistantSystem() }];
+    const messages = [{ role: 'system', content: consultantSystem() }];
     conversation.forEach(m => { if (m.role === 'user' || m.role === 'assistant') messages.push({ role: m.role, content: m.content }); });
     messages.push({ role: 'user', content: text });
     const base = (cfg.baseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
@@ -570,7 +558,19 @@ const SetModule = (() => {
     return fallbackReply(text) + '\n\n（想我做實際嘢，可以講：出社交貼文 / 準備 proposal / 寫 follow-up / 準備見客 brief / 分析客戶）';
   }
 
-  async function sendAssistant(text) {
+  // 判斷用家句說話係咪「做緊嘢」嘅動作指令（出 post / proposal / follow-up / 見客 / 客戶分析）
+  // 注意：要避開純顧問知識指令（如「分析客戶底牌」「準備開價話術」），否則會錯誤跳去 client/meeting 模組
+  function isActionIntent(text) {
+    const t = text.toLowerCase();
+    if (/小紅書|xiaohongshu|ig|instagram|facebook|fb|帖文|貼文|post|社交|封面|content|發文|發帖|出圖|做圖|圖/.test(t)) return true;
+    if (/proposal|建議書|建議/.test(t)) return true;
+    if (/follow|跟進|跟上/.test(t)) return true;
+    if (/見客準備|meeting|brief|約見|見面準備/.test(t)) return true;
+    if (/客戶分析|保障缺口|client分析|風險分析/.test(t)) return true;
+    return false;
+  }
+
+  async function sendConsultant(text) {
     conversation.push({ role: 'user', content: text });
     const cfg = getLLMConfig();
     const privacy = getPrivacyMode();
@@ -586,10 +586,15 @@ const SetModule = (() => {
     }
     let reply;
     try {
-      if (cfg.provider === 'mock' || privacy) reply = await assistantOffline(text);
-      else reply = await assistantLLM(text);
+      if (cfg.provider === 'mock' || privacy) {
+        // 離線：動作指令 → AI 私人助理路由；否則 → 全能顧問知識庫
+        if (isActionIntent(text)) reply = await assistantOffline(text);
+        else { await new Promise(r => setTimeout(r, 300)); reply = mockReplies[text] || fallbackReply(text); }
+      } else {
+        reply = await consultantLLM(text);
+      }
     } catch (e) {
-      reply = (await assistantOffline(text)) + '\n\n⚠️ 真 LLM 失敗（' + e.message + '），已用離線助理。';
+      reply = (isActionIntent(text) ? (await assistantOffline(text)) : (mockReplies[text] || fallbackReply(text))) + '\n\n⚠️ 真 LLM 失敗（' + e.message + '），已用離線助理。';
     }
     conversation.push({ role: 'assistant', content: reply });
     removeTyping();
@@ -605,9 +610,9 @@ const SetModule = (() => {
     isBotTyping = true;
     $('setSendBtn').disabled = true;
     showTyping();
-    // AI 私人助理：委派去專屬處理（function calling / 離線路由）
-    if (currentAgent && currentAgent.id === 'assistant') {
-      await sendAssistant(text);
+    // SET全能顧問 = 顧問知識 + AI 私人助理動作能力（二合一，委派去專屬處理）
+    if (currentAgent && currentAgent.id === 'negotiation') {
+      await sendConsultant(text);
       return;
     }
     const cfg = getLLMConfig();

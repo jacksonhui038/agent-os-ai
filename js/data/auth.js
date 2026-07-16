@@ -50,6 +50,14 @@ const Auth = {
     throw new Error('註冊失敗');
   },
 
+  async resendConfirmation(email) {
+    const data = await this._post('/auth/v1/resend', {
+      email,
+      type: 'signup'
+    });
+    return data;
+  },
+
   async signIn(email, password) {
     const data = await this._post('/auth/v1/token?grant_type=password', { email, password });
     if (data?.access_token) { this._save(data); return data; }

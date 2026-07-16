@@ -55,7 +55,11 @@ ok(cfg.provider === 'mock', '一鍵切：離線示範 → provider mock（清空
 // ── 3. 登入錯誤中文化（紅 BAR 唔好再顯英文）──
 ok(/Email 或密碼錯誤/.test(window.friendlyAuthMsg('Invalid login credentials')), '登入：invalid credentials → 中文「Email 或密碼錯誤」');
 ok(/仲未確認/.test(window.friendlyAuthMsg('Email not confirmed')), '登入：email not confirmed → 中文「仲未確認」');
+ok(/仲未確認/.test(window.friendlyAuthMsg('User is not confirmed')), '登入：user is not confirmed → 中文「仲未確認」');
 ok(/已經註冊/.test(window.friendlyAuthMsg('User already registered')), '登入：already registered → 中文');
+ok(/Email 格式唔啱/.test(window.friendlyAuthMsg('Unable to validate email address: invalid format')), '登入：invalid email format → 中文');
+ok(/註冊已經停用/.test(window.friendlyAuthMsg('Signup disabled')), '登入：signup disabled → 中文');
+ok(/寄信太密/.test(window.friendlyAuthMsg('Over email send rate limit')), '登入：rate limit → 中文');
 ok(/網絡連唔到/.test(window.friendlyAuthMsg('Failed to fetch')), '登入：網絡錯誤 → 中文');
 
 // ── 4. 登入 Enter 綁定 ──
@@ -63,6 +67,13 @@ const pw = doc.getElementById('authPw');
 const em = doc.getElementById('authEmail');
 ok(/authSignIn/.test(pw.getAttribute('onkeydown') || ''), '登入：密碼欄 Enter → 觸發 authSignIn');
 ok(/authSignIn/.test(em.getAttribute('onkeydown') || ''), '登入：Email 欄 Enter → 觸發 authSignIn');
+
+// ── 5. LLM 對話歷史增強 ──
+ok(/記住對話歷史/.test(window.SetModule.__test.consultantSystem()), 'LLM：system prompt 強調記住對話歷史');
+const inj1 = window.SetModule.__test.buildContextInjection('我唔識見客，好緊張');
+ok(/焦慮|緊張/.test(inj1), 'LLM：context injection 偵測焦慮情緒');
+const inj2 = window.SetModule.__test.buildContextInjection('點搵客先？冇客見');
+ok(/搵客/.test(inj2), 'LLM：context injection 偵測搵客目標');
 
 console.log('\n=== SET 功能回歸測試: ' + pass + ' passed, ' + fail + ' failed ===');
 process.exit(fail > 0 ? 1 : 0);

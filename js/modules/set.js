@@ -145,13 +145,29 @@ const SetModule = (() => {
     $('setChatTitle').textContent = currentAgent.name;
     const msgs = $('setChatMessages');
     msgs.innerHTML = '';
-    conversation = [];
-    addBotMessage(currentAgent.welcome);
+    conversation = loadConversation();
+    if (conversation.length === 0) {
+      addBotMessage(currentAgent.welcome);
+    } else {
+      // 還原歷史訊息到 UI
+      conversation.forEach(m => {
+        if (m.role === 'user') addUserMessage(m.content);
+        else if (m.role === 'assistant') addBotMessage(m.content);
+      });
+    }
     renderChips(currentAgent.chips);
     $('setMsgInput').focus();
     const cfg = getLLMConfig();
     const privacy = getPrivacyMode();
     $('setStatusDot').textContent = statusText(cfg, privacy);
+  }
+
+  function clearChat() {
+    clearConversation();
+    const msgs = $('setChatMessages');
+    if (msgs) msgs.innerHTML = '';
+    if (currentAgent) addBotMessage(currentAgent.welcome);
+    renderChips(currentAgent ? currentAgent.chips : []);
   }
 
   function createAvatar(isUser) {
@@ -204,6 +220,11 @@ const SetModule = (() => {
     const bar = $('setChipsBar');
     bar.innerHTML = '';
     bar.classList.add('hidden-chips');
+  }
+
+  function pushMessage(role, content) {
+    conversation.push({ role, content });
+    saveConversation();
   }
 
   function addUserMessage(text) {
@@ -634,8 +655,39 @@ const SetModule = (() => {
     { type: 'function', function: { name: 'client_analyze', description: '開啟客戶分析並填好基本資料', parameters: { type: 'object', properties: { name: { type: 'string' }, age: { type: 'string' }, job: { type: 'string' }, income: { type: 'string' }, marital: { type: 'string', enum: ['single','married','divorced'] }, kids: { type: 'string' } }, required: [] } } }
   ];
 
+  // 對話歷史持久化：每個 agent 獨立，換頁／refresh 後仍可還原（只存本地，唔上雲）
+  const CONV_KEY = 'set_conversation_';
+  function convKey() { return CONV_KEY + (currentAgent ? currentAgent.id : 'default'); }
+  function saveConversation() {
+    try { localStorage.setItem(convKey(), JSON.stringify(conversation)); } catch (e) {}
+  }
+  function loadConversation() {
+    try {
+      const raw = localStorage.getItem(convKey());
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) { return []; }
+  }
+  function clearConversation() {
+    conversation = [];
+    try { localStorage.removeItem(convKey()); } catch (e) {}
+  }
+
+  function buildContextInjection(text) {
+    const ctx = inferScriptContext(text);
+    const recent = recentUserTurns(3).map((m, i) => `${i + 1}. ${m.content}`).join('\n');
+    const lastAssistant = lastAssistantReply();
+    let s = '\n\n【當前對話狀態】\n';
+    if (ctx.emotion && ctx.emotion !== 'neutral') s += `用戶情緒：${ctx.emotion === 'anxious' ? '焦慮/緊張' : ctx.emotion === 'frustrated' ? '挫敗/不滿' : ctx.emotion === 'curious' ? '好奇' : ctx.emotion}\n`;
+    if (ctx.topic) s += `話題：${ctx.topic}\n`;
+    if (ctx.goal) s += `目標：${ctx.goal}\n`;
+    if (recent) s += `最近用戶輸入：\n${recent}\n`;
+    if (lastAssistant) s += `你上一句回覆：${lastAssistant.substring(0, 200)}${lastAssistant.length > 200 ? '…' : ''}\n`;
+    s += '請基於以上狀態同對話歷史回應，唔好重複已經講過嘅內容，亦唔好再叫用家「揀情境」。';
+    return s;
+  }
+
   function consultantSystem() {
-    return '你係「SET全能顧問」，一個為香港保險經紀（Manulife HK 持牌）而設嘅全能 AI 顧問，亦係用家嘅私人工作助理，嵌入喺 Agent OS AI 工作台。\n\n你嘅雙重角色：\n（一）保險銷售顧問知識——包晒六大範疇：VHIS 自願醫保、人壽危疾、ECI 勞工保險、MPF/TVC 轉化、新員工 Onboarding，外加內地客專項（見面困難、開 case 話術、內地市場知識）。幫用家制定談判策略、拆解客戶底牌、模擬簽單對話。\n（二）AI 私人助理動作能力（用 function calling 自動執行）：\nsocial_create — 一次過生成 IG / 小紅書 / Facebook 三平台貼文同封面圖\nproposal_create — 開 Proposal 引擎\nfollowup_create — 開 Follow-Up 生成器\nmeeting_create — 開見客準備\nclient_analyze — 開客戶分析\n\n規則：\n- 用繁體中文（粵語口吻）回答，簡潔、實用、可直接出口。\n- 當用家想做具體工作（出 post、寫 proposal、跟進、見客準備、分析客戶），優先 call 對應 tool，唔好淨係講。\n- 當用家想傾保險知識／策略／話術，直接俾專業答案（六大範疇＋內地客專項）。\n- 涉及金額要準確（VHIS 扣稅上限 HK$8,000/人、TVC HK$60,000/年）。\n- 唔好講「保證回報」等違規字眼；國內平台對保險業有限制，內容要合規、避免敏感字眼。\n- 正式發佈前提醒用家自己再檢查一次。';
+    return '你係「SET全能顧問」，一個為香港保險經紀（Manulife HK 持牌）而設嘅全能 AI 顧問，亦係用家嘅私人工作助理，嵌入喺 Agent OS AI 工作台。\n\n你嘅雙重角色：\n（一）保險銷售顧問知識——包晒六大範疇：VHIS 自願醫保、人壽危疾、ECI 勞工保險、MPF/TVC 轉化、新員工 Onboarding，外加內地客專項（見面困難、開 case 話術、內地市場知識）。幫用家制定談判策略、拆解客戶底牌、模擬簽單對話。\n（二）AI 私人助理動作能力（用 function calling 自動執行）：\nsocial_create — 一次過生成 IG / 小紅書 / Facebook 三平台貼文同封面圖\nproposal_create — 開 Proposal 引擎\nfollowup_create — 開 Follow-Up 生成器\nmeeting_create — 開見客準備\nclient_analyze — 開客戶分析\n\n記住對話歷史：\n- 你會收到「System」提示以及之前每一個用戶同你嘅對話回合。請用完整對話歷史理解用戶嘅情境、情緒同目標，唔好叫用家重複講過嘅嘢。\n- 如果上一句你係 fallback / 罐頭回覆，而家用戶繼續追問，你要先認真回應問題，唔可以再重複同一個 fallback。\n- 如果對話顯示用戶焦慮、挫敗或係新手，先用同理心回應，再畀具體框架或下一步。\n\n規則：\n- 用繁體中文（粵語口吻）回答，簡潔、實用、可直接出口。\n- 當用家想做具體工作（出 post、寫 proposal、跟進、見客準備、分析客戶），優先 call 對應 tool，唔好淨係講。\n- 當用家想傾保險知識／策略／話術，直接俾專業答案（六大範疇＋內地客專項）。\n- 涉及金額要準確（VHIS 扣稅上限 HK$8,000/人、TVC HK$60,000/年）。\n- 唔好講「保證回報」等違規字眼；國內平台對保險業有限制，內容要合規、避免敏感字眼。\n- 正式發佈前提醒用家自己再檢查一次。';
   }
 
   function extractTopic(text) {
@@ -703,8 +755,11 @@ const SetModule = (() => {
 
   async function consultantLLM(text) {
     const cfg = getLLMConfig();
-    const messages = [{ role: 'system', content: consultantSystem() }];
-    conversation.forEach(m => { if (m.role === 'user' || m.role === 'assistant') messages.push({ role: m.role, content: m.content }); });
+    const context = buildContextInjection(text);
+    const sys = consultantSystem() + context;
+    const history = conversation.slice(-40); // 限制 token 用量，保留最近 40 個回合
+    const messages = [{ role: 'system', content: sys }];
+    history.forEach(m => { if (m.role === 'user' || m.role === 'assistant') messages.push({ role: m.role, content: m.content }); });
     messages.push({ role: 'user', content: text });
     const base = (cfg.baseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
     const mk = (msgs, tools) => fetch(base + '/chat/completions', {
@@ -773,13 +828,13 @@ const SetModule = (() => {
   }
 
   async function sendConsultant(text) {
-    conversation.push({ role: 'user', content: text });
+    pushMessage('user', text);
     const cfg = getLLMConfig();
     const privacy = getPrivacyMode();
     // 空 key pre-check（同 SET 其他 agent 一致，避免 user 見到 401）
     if (cfg.provider === 'openai' && !cfg.apiKey) {
       const reply = '⚠️ 你仲未填 API Key。\n\n請按右上角 ⚙️ 設定 → 撳「NVIDIA」或「OpenRouter」preset 掣 → 喺「API Key」一欄貼你嘅 key → 再撳「保存設定」後重新發送。\n\n* NVIDIA NIM（免費無限）→ https://build.nvidia.com → 註冊 → Settings → API Keys\n* OpenRouter（免費模型）→ https://openrouter.ai/keys → 註冊拎 key\n\n（冇 key 都唔緊要，我可以暫時用離線助理幫你做基本嘢。）';
-      conversation.push({ role: 'assistant', content: reply });
+      pushMessage('assistant', reply);
       removeTyping();
       addBotMessage(reply);
       isBotTyping = false;
@@ -798,7 +853,7 @@ const SetModule = (() => {
     } catch (e) {
       reply = (isActionIntent(text) ? (await assistantOffline(text)) : (mockReplies[text] || fallbackReply(text))) + '\n\n⚠️ 真 LLM 失敗（' + e.message + '），已用離線助理。';
     }
-    conversation.push({ role: 'assistant', content: reply });
+    pushMessage('assistant', reply);
     removeTyping();
     addBotMessage(reply);
     isBotTyping = false;
@@ -823,7 +878,7 @@ const SetModule = (() => {
     // 空 key pre-check：唔直接 call API 令用家見到 401
     if (cfg.provider === 'openai' && !cfg.apiKey) {
       reply = '⚠️ 你仲未填 API Key。\n\n請按右上角 ⚙️ 設定 → 撳「NVIDIA」或「OpenRouter」preset 掣 → 喺「API Key」一欄貼你嘅 key → 再撳「保存設定」後重新發送。\n\n* NVIDIA NIM（免費無限）→ https://build.nvidia.com → 註冊 → Settings → API Keys\n* OpenRouter（免費模型）→ https://openrouter.ai/keys → 註冊拎 key';
-      conversation.push({ role: 'assistant', content: reply });
+      pushMessage('assistant', reply);
       addBotMessage(reply);
       isBotTyping = false;
       $('setSendBtn').disabled = false;
@@ -835,16 +890,16 @@ const SetModule = (() => {
         // 離線示範：極短思考 delay 令三點動畫有呼吸感
         await new Promise(r => setTimeout(r, 300));
         reply = mockReplies[text] || fallbackReply(text);
-        conversation.push({ role: 'assistant', content: reply });
+        pushMessage('assistant', reply);
       } else {
         reply = await callLLM(text);
-        conversation.push({ role: 'user', content: text });
-        conversation.push({ role: 'assistant', content: reply });
+        pushMessage('user', text);
+        pushMessage('assistant', reply);
       }
     } catch (e) {
       // 真 LLM 呼叫失敗 → 退回 mock + 提示，唔會整崩個介面
       reply = (mockReplies[text] || fallbackReply(text)) + '\n\n⚠️ 真 LLM 呼叫失敗（' + e.message + '），已退回離線示範回覆。';
-      conversation.push({ role: 'assistant', content: reply });
+      pushMessage('assistant', reply);
     }
     removeTyping();
     addBotMessage(reply);
@@ -954,8 +1009,8 @@ const SetModule = (() => {
     showSetToast('已切換 LLM → ' + name + (cfg.provider === 'openai' && !cfg.apiKey ? '（記得填 API Key 先出到真回覆）' : ''));
   }
 
-  const api = { init, showDiscover, sendMessage, openSettings, closeSettings, saveSettings, onProviderChange, maskInput, quickSwitch };
-  api.__test = { fallbackReply, detectEmotion, inferScriptContext, recentUserTurns, inferTopicFromHistory, isProspectingQuestion, isStudentProfile, hasNetworkHint, pushConversation: (role, content) => conversation.push({ role, content }) };
+  const api = { init, showDiscover, sendMessage, openSettings, closeSettings, saveSettings, onProviderChange, maskInput, quickSwitch, clearChat };
+  api.__test = { fallbackReply, detectEmotion, inferScriptContext, recentUserTurns, inferTopicFromHistory, isProspectingQuestion, isStudentProfile, hasNetworkHint, consultantSystem, buildContextInjection, pushConversation: (role, content) => conversation.push({ role, content }) };
   return api;
 })();
 window.SetModule = SetModule;

@@ -324,21 +324,29 @@ function showApp() {
     if (lb) lb.style.display = '';
   }
 }
-function showAuthError(msg) {
+function showAuthError(msg, raw) {
   const e = document.getElementById('authError');
+  const resend = document.getElementById('btnResend');
   if (!e) return;
-  e.textContent = msg;
+  window._lastAuthError = raw || msg || '';
+  // 詳細錯誤可以展開，方便用戶同我哋睇到 Supabase 原始錯誤
+  const detail = raw && raw !== msg ? `<br><a id="authErrorToggle" href="#" onclick="event.preventDefault();var s=this.nextElementSibling;s.style.display=s.style.display==='none'?'block':'none';this.textContent=s.style.display==='none'?'（顯示詳細錯誤）':'（隱藏詳細錯誤）";return false;" style="font-size:12px;opacity:.8;text-decoration:underline">（顯示詳細錯誤）</a><span style="display:none;font-size:12px;opacity:.8;white-space:pre-wrap;word-break:break-word">${escapeHtml(raw)}</span>` : '';
+  e.innerHTML = escapeHtml(msg) + detail;
   e.style.display = 'block';
+  // 若錯誤係未確認 email，顯示「重發確認信」掣
+  if (resend) resend.style.display = /email not confirmed|user is not confirmed|仲未確認/i.test(raw || msg) ? 'block' : 'none';
 }
 // 將 Supabase 英文錯誤翻譯成中文，避免登入紅 BAR 顯示奇怪英文
 function friendlyAuthMsg(raw) {
   const m = (raw || '').toString();
   const map = [
     [/invalid login credentials/i, 'Email 或密碼錯誤，請再試一次'],
-    [/email not confirmed/i, '個 email 仲未確認 —— 去收確認信撳入面嘅 link 啟用帳號，再返嚟登入'],
+    [/email not confirmed|user is not confirmed/i, '個 email 仲未確認 —— 撳「重發確認信」再收信啟用帳號'],
     [/user already registered/i, '呢個 email 已經註冊過喇，直接撳「登入」就得'],
-    [/password should be at least/i, '密碼至少要 6 位'],
-    [/signup requires a valid password/i, '密碼格式唔啱，至少要 6 位'],
+    [/password should be at least|signup requires a valid password/i, '密碼至少要 6 位'],
+    [/unable to validate email address/i, 'Email 格式唔啱，請檢查有冇打錯'],
+    [/signup disabled/i, '註冊已經停用，請聯絡管理員'],
+    [/over email send rate limit/i, '寄信太密，請等幾分鐘再試'],
     [/for security purposes, you can only request this after/i, '太多次嘗試，等幾秒再試'],
     [/networkerror|failed to fetch|load failed|typeerror/i, '網絡連唔到，檢查下網絡再試'],
     [/invalid api key|apikey|unauthorized/i, '登入服務暫時有問題，請聯絡管理員']
@@ -365,8 +373,10 @@ async function authSignIn() {
     await CloudSync.pullAll();
     showApp();
     if (!_appStarted) initApp();
-  } catch (e) { showAuthError(friendlyAuthMsg(e.message)); }
-  finally { setAuthLoading(false); }
+  } catch (e) {
+    console.error('authSignIn error:', e);
+    showAuthError(friendlyAuthMsg(e.message), e.message);
+  } finally { setAuthLoading(false); }
 }
 async function authSignUp() {
   showAuthError('');
@@ -381,10 +391,25 @@ async function authSignUp() {
       showApp();
       if (!_appStarted) initApp();
     } else {
-      showAuthError('✅ 註冊成功！我哋已經 send 咗確認信去 ' + email + '，請撳入面嘅 link 啟用帳號，然後返嚟登入。（如果收唔到，可以叫我幫你關咗 email 確認）');
+      showAuthError('✅ 註冊成功！我哋已經 send 咗確認信去 ' + email + '，請撳入面嘅 link 啟用帳號，然後返嚟登入。（如果收唔到，可以撳下面「重發確認信」）', '註冊成功，待 email 確認');
     }
-  } catch (e) { showAuthError(friendlyAuthMsg(e.message)); }
-  finally { setAuthLoading(false); }
+  } catch (e) {
+    console.error('authSignUp error:', e);
+    showAuthError(friendlyAuthMsg(e.message), e.message);
+  } finally { setAuthLoading(false); }
+}
+async function authResendConfirmation() {
+  showAuthError('');
+  const email = (document.getElementById('authEmail').value || '').trim();
+  if (!email) { showAuthError('請先填 email'); return; }
+  setAuthLoading(true);
+  try {
+    await Auth.resendConfirmation(email);
+    showAuthError('✅ 已重新發送確認信去 ' + email + '，請檢查 inbox／垃圾郵件箱。', 'resend sent');
+  } catch (e) {
+    console.error('authResendConfirmation error:', e);
+    showAuthError(friendlyAuthMsg(e.message), e.message);
+  } finally { setAuthLoading(false); }
 }
 async function authSignOut() {
   await Auth.signOut();

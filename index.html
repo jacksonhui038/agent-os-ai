@@ -21,6 +21,7 @@
     <input id="authPw" type="password" class="auth-input" placeholder="密碼（至少 6 位）" autocomplete="current-password" onkeydown="if(event.key==='Enter'){event.preventDefault();if(!document.getElementById('btnSignIn').disabled)authSignIn();}">
     <button id="btnSignIn" class="btn btn-primary btn-block" onclick="authSignIn()">登入</button>
     <button id="btnSignUp" class="btn btn-ghost btn-block" onclick="authSignUp()">註冊新帳號</button>
+    <button id="btnResend" class="btn btn-ghost btn-block" style="display:none;" onclick="authResendConfirmation()">重發確認信</button>
     <p class="auth-hint">首次使用請按「註冊」，用你公司 email 開個人帳號。資料會雲端保存，每位同事各自隔離。</p>
   </div>
 </div>
@@ -552,8 +553,8 @@
                   <div class="logo-word" id="setChatTitle" style="font-size:15px; flex:0 0 auto;">專家</div>
                 </div>
                 <div class="right-group">
-                  <div class="icon-btn"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div>
-                  <div class="icon-btn"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></div>
+                  <div class="icon-btn" title="清空對話" onclick="SetModule.clearChat()"><svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14Z"/></svg></div>
+                  <div class="icon-btn" title="更多" onclick="SetModule.openSettings()"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></div>
                 </div>
               </div>
               <div class="status-dot" id="setStatusDot"></div>

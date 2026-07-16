@@ -291,30 +291,140 @@ const SetModule = (() => {
     '約見提醒': '約見提醒腳本：見面前 1 日「X 生，聽日 3 點見，我帶埋份比較表」；見面後 1 日「多謝抽空，呢度係我講過嘅重點」。定時但唔煩。',
     'WhatsApp 腳本': 'WhatsApp 腳本要短、有價值、一行 call-to-action：\n「X 生，朝早！最近 TVC 扣稅額度改咗，同你情況啱啱好，得閒我 send 個 1 分鐘比較你睇？」\n要我按你客度身寫？'
   };
+  // ---- 對話上下文推導：令離線回覆更人性化 ----
+  function recentUserTurns(n) {
+    return conversation
+      .filter(m => m.role === 'user')
+      .slice(-n)
+      .map(m => m.content);
+  }
+  function detectEmotion(text) {
+    const lower = text.toLowerCase();
+    if (/唔識|不會|不会|不懂|唔懂|新手|第一次|驚|怕|緊張|焦虑|焦慮|擔心|担心|壓力|压力|好慌|亂|無從|不知點|點算|點搞|怎麼辦|怎么办|無助|无助/.test(lower)) return 'anxious';
+    if (/煩|討厭|廢|垃圾|冇用|無用|浪費時間|唔好用|不好用|罐頭|機械人|機器人|死板|唔似人|不像人|無聊|无聊/.test(lower)) return 'frustrated';
+    if (/想學|學下|教我|點學|點練|怎麼學|怎樣學|想知|想知道|請問|請教|點樣做好|點樣做先|如何/.test(lower)) return 'curious';
+    return 'neutral';
+  }
+  function inferTopicFromHistory(text) {
+    const recent = recentUserTurns(3).join(' ');
+    const combined = (recent + ' ' + text).toLowerCase();
+    if (/vhis|自願醫保|醫保|医保|醫療|医疗|住院|扣稅|扣税/.test(combined)) return 'VHIS';
+    if (/危疾|重疾|人壽|人寿|ci|癌症|癌|中風|心臟病|嚴重疾病/.test(combined)) return '人壽/危疾';
+    if (/eci|勞工|劳工|僱主|雇主|員工|员工|工傷|補償/.test(combined)) return 'ECI';
+    if (/mpf|強積金|强积金|tvc|退休|年金|供款|自願供款/.test(combined)) return 'MPF/TVC';
+    if (/內地|内地|跨境|大陸|深圳|北上|國內|国内|普通話|人民幣/.test(combined)) return '內地客';
+    if (/儲蓄|储蓄|分紅|分紅險|教育金|美元資產|理財|投资|投資/.test(combined)) return '儲蓄/理財';
+    if (/跟進|跟进|whatsapp|沉默|喚醒|唤醒|覆|回覆|追|催/.test(combined)) return '跟進';
+    if (/約見|约见|見面|见面|初次|拜訪|拜访|開場|破冰|開口|開白|約出/.test(combined)) return '初次見客/約見';
+    if (/價格|价格|貴|贵|平|便宜|預算|预算|異議|异议|反對|反对|拒絕|拒绝|考慮|考虑|諗緊|想想/.test(combined)) return '處理異議';
+    return '';
+  }
+  function inferScriptContext(text) {
+    const lower = text.toLowerCase();
+    const emotion = detectEmotion(text);
+    const recent = recentUserTurns(3).join(' ');
+    const recentLower = recent.toLowerCase();
+    const topic = inferTopicFromHistory(text);
+    let goal = '';
+    if (/約見|约见|見面|见面|約出|约出/.test(lower)) goal = '約見';
+    else if (/初次|第一次|開場|破冰|拜訪|拜访|開口|開白|唔識見客|不会见客|點見|點樣見/.test(lower)) goal = '初次見客';
+    else if (/異議|反对|拒絕|拒绝|價格|貴|預算|考慮|諗緊|想想|再諗/.test(lower)) goal = '處理異議';
+    else if (/跟進|跟进|沉默|whatsapp|訊息|message|覆|回覆|追/.test(lower)) goal = '跟進';
+    else if (/話術|脚本|script|開場|開口|腳本|怎麼講|點講/.test(recentLower)) goal = '話術';
+    return { emotion, topic, goal };
+  }
+
   function fallbackReply(text) {
     const lower = text.toLowerCase();
-    const wantScript = /話術|话术|腳本|脚本|script|開場|开场|破冰|開白|開口|點講|点讲|點開口|怎麼講|怎么讲|寫段|写段|寫一段|写一段|幫我寫|帮我写|生成/.test(text);
+    const ctx = inferScriptContext(text);
+    const SCRIPT_HINT = /話術|话术|腳本|脚本|script|開場|开场|破冰|開白|開口|點講|点讲|點開口|怎麼講|怎么讲|寫段|写段|寫一段|写一段|幫我寫|帮我写|生成|我想要|我要/.test(text);
 
-    // ── 意圖：生成話術／腳本 ── 直接畀可出口範本 ──
-    if (wantScript) {
-      if (lower.includes('內地') || lower.includes('内地')) return '【見內地客・破冰話術（可直接用）】\n\n「X 生你好，我係 Manulife 香港嘅顧問。好多內地朋友最近都關心資產配置同子女教育呢兩件事，其實唔少人會用香港保險做呢一環。我唔急住介紹產品，想先了解下你而家最想解決邊樣——係美元資產、教育金、定係高端醫療？」\n\n▸ 重點：由「你嘅需要」入，唔好由「我嘅產品」入；全程唔講「保證回報」（合規紅線）。\n▸ 想要「約見」定「處理疑慮」版本？話我知。';
-      if (lower.includes('eci') || lower.includes('僱主') || lower.includes('雇主') || lower.includes('勞工') || lower.includes('劳工')) return '【向僱主推 ECI・開口話術（可直接用）】\n\n「X 老闆，其實你一請咗人，法例上就一定要幫員工買勞工保險（ECI），冇買最高罰十萬蚊仲可能要坐監。我可以即刻幫你搞掂張 ECI，順便同你檢查下 MPF 有冇漏，一次過幫你合規晒。」\n\n▸ 用 legal hook（法例必買）切入，最自然、無抗拒。\n▸ 成交後順勢：團體醫療 → VHIS。要「團體醫療」版本嗎？';
-      if (lower.includes('vhis') || lower.includes('醫保') || lower.includes('医保') || lower.includes('醫療') || lower.includes('医疗')) return '【VHIS 講解・話術（可直接用）】\n\n「X 生，而家買醫療保險有個著數：買自願醫保（VHIS），每人每年最多可以扣稅 HK$8,000，夫婦兩個就 HK$16,000。即係話你買保障之餘，仲慳到稅。公營醫院排期長、私家又貴，VHIS 啱啱好幫你補呢個位。」\n\n▸ 賣點次序：慳稅 → 公院排期 → 私院貴 → VHIS 補位。\n▸ 要「靈活 vs 標準計劃」點揀嘅版本？';
-      if (lower.includes('危疾') || lower.includes('人壽') || lower.includes('重疾')) return '【人壽／危疾・處理「已有公司醫保」異議話術（可直接用）】\n\n「X 生，公司醫保的確好，但佢有兩個限制：一係你離職就冇咗，二係佢只係報醫療費，唔會賠你病咗嗰段冇收入嘅日子。危疾係一筆過賠現金，等你安心養病、屋企照過。呢個係公司醫保補唔到嘅位。」\n\n▸ 邏輯：公司醫保會斷 + 只報醫療費 → 危疾補收入缺口。\n▸ 要「保障缺口計算」版本嗎？';
-      if (lower.includes('跟進') || lower.includes('跟进') || lower.includes('沉默') || lower.includes('whatsapp') || lower.includes('喚醒') || lower.includes('唤醒')) return '【跟進沉默客・WhatsApp 話術（可直接用）】\n\n「X 生，朝早☀️！最近政府調整咗自願醫保／TVC 嘅扣稅安排，同你之前傾嗰個情況啱啱好有關。我整理咗個 1 分鐘重點，得閒我 send 你睇下？如果啱先再約，唔啱都當多個資訊 😊」\n\n▸ 三段式：有價值資訊 → 低摩擦選擇題 → 唔啱都無壓力。\n▸ 要「約見前提醒」或「見面後跟進」版本？';
-      if (lower.includes('約見') || lower.includes('约见') || lower.includes('見面') || lower.includes('见面')) return '【約見・低壓力話術（可直接用）】\n\n「X 生，我呢排會喺深圳／香港，如果你得閒，我帶份香港保險嘅比較表同你飲杯嘢，半個鐘搞掂，當幫你做定功課。你星期幾方便啲？」\n\n▸ 三個關鍵：講明「半個鐘」「有嘢帶」「無硬銷」，降低抗拒。';
-      // 通用話術範本
-      return '【' + (currentAgent ? currentAgent.name : 'SET') + '・話術範本（可直接用）】\n\n「X 生你好，多謝你抽時間。我今次唔係想即刻 sell 你嘢，係想先了解你而家最關心邊樣——係保障、慳稅、定係長線儲蓄？我可以按你情況，幫你比較一兩個最啱嘅方案，你覺得啱先再傾下一步。」\n\n▸ 你話我知【客戶類型 + 產品 + 目標（開case／約見／跟進／處理異議）】，我幫你出一段更貼身、可以照抄嘅話術。';
+    // 1. 用戶表達挫敗 / 覺得罐頭 → 先認同，再引導
+    if (ctx.emotion === 'frustrated') {
+      return `收到，我感受到你覺得啲回覆太機械、唔似真人。呢個反饋好重要，我哋一齊調整。
+
+為咗寫一段真正貼你嘅話術，我只需要你答兩條：
+1. 你而家最想解決咩場景？（初次見客／約見／處理異議／跟進）
+2. 你個客大概係邊類人？（內地客／僱主／家庭客／年輕客）
+
+你答完，我直接幫你砌一段自然、唔似罐頭嘅開場白。`;
     }
 
-    // ── 其他意圖：畀方向 + 引導 ──
-    if (lower.includes('價格') || lower.includes('贵') || lower.includes('貴')) return '價格異議通常有三層：預算、價值感、比較對象。可以先問客：「您覺得貴，係相對邊個方案比較？」鎖定真正異議點。要話術就打「生成價格異議話術」。';
-    if (lower.includes('客戶') || lower.includes('客户')) return '講講呢個客嘅背景：行業、職位、決策權限，同目前卡喺邊關？我可以幫你分析底牌，或直接生成對應話術（打「生成話術」就得）。';
+    // 2. 用戶焦慮 / 新手 / 唔識 → 先安撫，再畀框架，唔再叫人打指令
+    if (ctx.emotion === 'anxious') {
+      if (ctx.goal === '初次見客' || ctx.goal === '約見' || SCRIPT_HINT) {
+        return `放心，唔識見客、緊張好正常，尤其頭幾次。我哋唔使背稿，記住三個位就得：
+
+1. **開場唔好 sell**：先問「你而家最想解決邊樣？」
+2. **中場用故事帶出缺口**：例如「好多人以為公司醫保夠，但離職就冇咗」
+3. **收尾畀低壓力下一步**：「我整理份比較你睇，睇完先再決定」
+
+想我直接幫你寫一段「初次見客」嘅開場白？你話我知：你個客係邊類人（內地客／家庭客／僱主），我寫一段你照用。`;
+      }
+      return `明白，新手階段最緊要係有個框架傍身，唔使驚。我哋可以由一個具體場景開始練：
+
+• 初次見客開場（點開口唔尷尬）
+• 約見低壓力話術（約人出嚟唔硬銷）
+• 處理「我要諗諗」（唔硬銷又唔流失）
+• 跟進沉默客（WhatsApp 點開口）
+
+你揀一個，或者簡單講你而家卡喺邊。`;
+    }
+
+    // 3. 用戶想學 → 引導揀場景
+    if (ctx.emotion === 'curious') {
+      return `好，想學就最好。我建議由一個具體場景開始練，唔好一次學晒：
+
+• 初次見客開場（點開口唔尷尬）
+• 約見內地客（低壓力約出嚟）
+• 處理「我要諗諗」（唔硬銷又唔流失）
+• 跟進沉默客（WhatsApp 點開口）
+
+你揀一個，或者講你個客背景，我直接寫段你練。`;
+    }
+
+    // 4. 話術相關：唔好直接畀「X 生」範本，先問清楚
+    if (SCRIPT_HINT) {
+      // 如果已經能推導到 topic，就直接問一個 follow-up
+      if (ctx.topic && ctx.goal) {
+        return `好，你想做 ${ctx.topic} 嘅 ${ctx.goal}話術。為咗寫得更貼你風格，答我兩條：
+1. 你個客係邊類人？（例如：30 歲內地客／僱主／家庭主婦）
+2. 你想佢聽完之後做咩？（例如：約見／交資料／俾預算）
+
+我寫一段自然、唔似罐頭嘅話術你照用。`;
+      }
+      // 完全無 context，先問 3 個關鍵問題
+      return `好，我幫你寫段話術。不過「X 生」範本太 generic，我寧願問清楚少少，寫段你真正用得嘅：
+
+1. **客戶類型**：係內地客、僱主、家庭客、定年輕客？
+2. **產品/場景**：VHIS、危疾、人壽、約見、跟進、定處理異議？
+3. **目的**：你想佢聽完做咩？（約見/交資料/俾預算/回覆）
+
+答到兩項，我即刻寫。`;
+    }
+
+    // 5. 其餘 keyword 保留原有特定話術，但最後引導更自然
+    if (lower.includes('內地') || lower.includes('内地')) return '內地客最緊要係信任同合規：見面安排、破冰用關心唔好硬 sell、簽單要喺香港。你而家係卡喺「約唔到出嚟」，定係「出到嚟唔知講咩」？我針對嗰個環節幫你寫。';
+    if (lower.includes('eci') || lower.includes('僱主') || lower.includes('雇主') || lower.includes('勞工') || lower.includes('劳工')) return '向僱主推 ECI 最自然係用 legal hook：「請咗人就要買，唔買係犯法」。你而家係想開門白，定係想應對「我而家冇請人」？';
+    if (lower.includes('vhis') || lower.includes('醫保') || lower.includes('医保') || lower.includes('醫療') || lower.includes('医疗')) return 'VHIS 講解通常由「慳稅 + 公院排期 + 私院貴」三點入手。你個客係年輕單身，定係有家室？我寫段貼佢嘅版本。';
+    if (lower.includes('危疾') || lower.includes('人壽') || lower.includes('重疾')) return '危疾/人壽最緊要講「收入缺口」同「家庭責任」。你個客係單身、已婚未有小朋友，定係有家庭？背景唔同，開口白完全唔同。';
+    if (lower.includes('跟進') || lower.includes('跟进') || lower.includes('沉默') || lower.includes('whatsapp') || lower.includes('喚醒') || lower.includes('唤醒')) return '跟進沉默客最怕硬催。我建議三段式：有價值資訊 → 低摩擦選擇題 → 溫和截止。你上次同個客傾完幾耐？主題係咩？我寫段跟進訊息。';
+    if (lower.includes('約見') || lower.includes('约见') || lower.includes('見面') || lower.includes('见面')) return '約見要低壓力、有價值。我幫你寫段 WhatsApp：講明「半個鐘」「有嘢帶」「無硬銷」。你約緊邊類客？內地客、僱主、定家庭客？';
+    if (lower.includes('價格') || lower.includes('贵') || lower.includes('貴')) return '價格異議通常有三層：預算、價值感、比較對象。可以先問客：「您覺得貴，係相對邊個方案比較？」鎖定真正異議點。你想我寫段應對話術？話我知客背景。';
+    if (lower.includes('客戶') || lower.includes('客户')) return '講講呢個客嘅背景：行業、職位、決策權限，同目前卡喺邊關？我幫你分析底牌，或直接生成對應話術。';
     if (lower.includes('目標') || lower.includes('目标') || lower.includes('年度')) return '年度目標建議用 OKR 拆：先寫 3-5 個 Objectives，再配可量化嘅 Key Results。畀我你今年收入／客戶數目標，我幫你拆。';
-    if (lower.includes('僱主') || lower.includes('雇主') || lower.includes('員工') || lower.includes('员工')) return '僱主客由 ECI 法例切入最自然，建立關係後再 cross-sell 團體醫療同 VHIS。想要開口話術就打「生成 ECI 話術」。';
-    if (lower.includes('內地') || lower.includes('内地')) return '內地客重信任同合規：見面安排、破冰用關心唔好硬 sell、簽單要喺香港。想要話術就打「生成內地客破冰話術」。';
-    if (lower.includes('退休') || lower.includes('理財') || lower.includes('理财') || lower.includes('tvc')) return '退休／理財我幫你計缺口同講扣稅。畀我客嘅年齡同目標，我出個藍圖；想要話術就打「生成理財話術」。';
-    return '收到。你可以直接打「生成話術」＋想針對邊個場景（例如「生成 ECI 話術」「生成內地客破冰話術」「生成跟進 WhatsApp」），我即刻出一段可以照抄用嘅話術。';
+    if (lower.includes('僱主') || lower.includes('雇主') || lower.includes('員工') || lower.includes('员工')) return '僱主客由 ECI 法例切入最自然，建立關係後再 cross-sell 團體醫療同 VHIS。你係想開門白，定係想應對「我而家冇請人」？';
+    if (lower.includes('退休') || lower.includes('理財') || lower.includes('理财') || lower.includes('tvc')) return '退休／理財我幫你計缺口同講扣稅。畀我客嘅年齡同目標，我出個藍圖；想要話術就話我知客背景。';
+
+    // 6. 最後 fallback：唔再叫人打指令，而係畀情境選擇
+    return `我聽到喇。我哋可以由一個具體場景開始，唔使講太複雜：
+
+• 幫我寫初次見客開場
+• 幫我寫約見話術
+• 幫我寫處理異議話術
+• 幫我寫跟進沉默客 WhatsApp
+
+你簡單講你個客背景，我直接幫你砌一段。`;
   }
 
   // ── 私隱守護：PII 遮蔽 + 敏感模式 ──
@@ -752,6 +862,8 @@ const SetModule = (() => {
     showSetToast('已切換 LLM → ' + name + (cfg.provider === 'openai' && !cfg.apiKey ? '（記得填 API Key 先出到真回覆）' : ''));
   }
 
-  return { init, showDiscover, sendMessage, openSettings, closeSettings, saveSettings, onProviderChange, maskInput, quickSwitch };
+  const api = { init, showDiscover, sendMessage, openSettings, closeSettings, saveSettings, onProviderChange, maskInput, quickSwitch };
+  api.__test = { fallbackReply, detectEmotion, inferScriptContext, recentUserTurns, inferTopicFromHistory, pushConversation: (role, content) => conversation.push({ role, content }) };
+  return api;
 })();
 window.SetModule = SetModule;

@@ -998,7 +998,7 @@ const SetModule = (() => {
       html = '<div class="form-group"><label class="form-label" style="color:var(--navy)">API Base URL</label><input id="setLlmBase" class="form-input" value="' + (cfg.baseUrl || '') + '" placeholder="https://api.openai.com/v1"></div>' +
              '<div class="form-group"><label class="form-label" style="color:var(--navy)">API Key</label><input id="setLlmKey" type="password" class="form-input" value="' + (cfg.apiKey || '') + '" placeholder="sk-...（OpenAI / OpenRouter key）"></div>' +
              '<div class="form-group"><label class="form-label" style="color:var(--navy)">模型</label><input id="setLlmModel" class="form-input" value="' + (cfg.model || '') + '" placeholder="gpt-4o-mini / gemini-2.0-flash / claude-3-haiku"></div>';
-      if (hint) hint.innerHTML = '支援任何 OpenAI-compatible 外國端點（NVIDIA / OpenRouter / OpenAI / Google）。Key 只存在你瀏覽器 localStorage，唔會上傳任何 server。推薦用 <b>NVIDIA NIM</b>（build.nvidia.com）完全免費無限額，唔使信用卡。';
+      if (hint) hint.innerHTML = '支援任何 OpenAI-compatible 端點（NVIDIA / OpenRouter / SiliconFlow / OpenAI）。Key 只存在你瀏覽器 localStorage，唔會上傳任何 server。一撳上面「SiliconFlow」preset 會自動填好 Base URL 同 Model，你再貼 key 就得。';
     } else if (p === 'shared') {
       if (hint) hint.innerHTML = (forced ? '🔒 管理員已鎖定此模式。' : '') + '經 Supabase 資料表用<b>管理員共享 Key</b>，所有同事登入後自動用、唔洗填 API Key。Key 由管理員喺 Supabase SQL Editor 填入 <code>app_secrets</code> 一次（見 SET_SHARED_KEY_SETUP.sql）。需要已登入 Supabase 帳號。';
     } else {
@@ -1023,13 +1023,15 @@ const SetModule = (() => {
     }
   }
 
-  // ── 一鍵切 LLM 供應商（全部外國服務，唔用中國 provider）──
+  // ── 一鍵切 LLM 供應商（支援 OpenAI-compatible 外國端點 + 中國端點）──
   // NVIDIA NIM（build.nvidia.com）：完全免費、無限額、40 RPM、開源大額模型、OpenAI-compatible
   // OpenRouter（openrouter.ai）：免費模型（:free 後綴）、20 RPM、多模型閘道
+  // SiliconFlow（siliconflow.cn）：中國 OpenAI-compatible 端點，常見 DeepSeek/Qwen 模型
   const LLM_PRESETS = {
     shared:      { label: '管理員共享 Key（唔使填）', provider: 'shared', baseUrl: '', model: '' },
     nvidia:      { label: 'NVIDIA（免費無限）',    provider: 'openai', baseUrl: 'https://integrate.api.nvidia.com/v1', model: 'meta/llama-4-maverick' },
     openrouter:  { label: 'OpenRouter（免費）',    provider: 'openai', baseUrl: 'https://openrouter.ai/api/v1',       model: 'meta-llama/llama-3.3-70b-instruct:free' },
+    siliconflow: { label: 'SiliconFlow',             provider: 'openai', baseUrl: 'https://api.siliconflow.cn/v1',      model: 'deepseek-ai/DeepSeek-V3' },
     mock:        { label: '離線示範',              provider: 'mock',   baseUrl: '', model: '' }
   };
   function quickSwitch(key) {

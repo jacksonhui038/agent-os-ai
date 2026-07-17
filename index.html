@@ -580,6 +580,7 @@
               <div class="form-group">
                 <label class="form-label" style="color:var(--navy)">模式</label>
                 <select id="setLlmProvider" class="form-select" onchange="SetModule.onProviderChange()">
+                  <option value="shared">管理員共享 Key（唔使填）</option>
                   <option value="mock">離線示範（唔使 key）</option>
                   <option value="ollama">本地 Ollama（唔使 key）</option>
                   <option value="openai">API（OpenAI-compatible，需要 key）</option>

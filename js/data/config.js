@@ -16,15 +16,17 @@ const APP_CONFIG = {
     const k = (this.supabase.anonKey || '').trim();
     return u.startsWith('http') && k.length > 10;
   },
-  // SET 智能體 LLM 後端（用家亦可在 SET ⚙️ 設定直接填，會蓋過呢度）
-  // 為咗資料安全，預設用離線示範模式（mock），唔會將任何資料送出國。
-  // 想用真 AI → 喺 SET ⚙️ 設定撳「NVIDIA（免費無限）」或「OpenRouter（免費）」preset 掣，再去官網拎 key 貼落去。
-  //   NVIDIA NIM：https://build.nvidia.com → Settings → API Keys（免費無限額，40 RPM，推薦！）
-  //   OpenRouter：https://openrouter.ai/keys（有免費模型，20 RPM）
-  // 全部外國服務，資料唔會經過中國伺服器。
-  // provider: 'mock'（離線示範）| 'ollama'（本地，唔使 key，已棄用）| 'openai'（需 key，OpenAI-compatible）
+  // SET 智能體 LLM 後端
+  // provider: 'mock'（離線示範）| 'ollama'（本地，唔使 key，已棄用）| 'openai'（需 key，OpenAI-compatible）| 'shared'（管理員共享 Key，經 Supabase 資料表）
+  //
+  // ★ 用 'shared' 模式：所有同事登入後自動用管理員共享 Key，唔洗各自填 API Key。
+  //   Key 存放喺 Supabase `app_secrets` 資料表（由管理員喺 SQL Editor 填入一次，見 SET_SHARED_KEY_SETUP.sql），
+  //   前端只會喺用家已登入時，經 authenticated REST read（user JWT）拎到 key，再直接 call LLM provider。
+  //   好處：唔使 deploy 任何 Edge Function，改完 code push 就得。
+  //   注意：shared 模式需要已登入 Supabase（APP_CONFIG.supabase 有值）。
+  //   想 revert 返每人自己填 key → 改返 'mock' 或 'openai'。
   llm: {
-    provider: 'mock',
+    provider: 'shared',
     baseUrl: '',
     apiKey: '',
     model: ''

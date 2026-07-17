@@ -92,6 +92,11 @@ const SetModule = (() => {
   // 優先讀用家喺 SET ⚙️ 設定填嘅 localStorage，其次 config.js，最後 fallback mock
   const LS_KEY = 'set_llm_config';
   function getLLMConfig() {
+    // 管理員喺 config.js 強制 'shared'（管理員共享 Key，經 Supabase 資料表）
+    // → 所有用戶直接用，唔理佢哋 localStorage 有冇舊 key。其他人唔洗填 API Key。
+    if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.llm && APP_CONFIG.llm.provider === 'shared') {
+      return { provider: 'shared', baseUrl: '', apiKey: '', model: '' };
+    }
     try {
       const saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
       if (saved && saved.provider) return saved;
@@ -596,6 +601,7 @@ const SetModule = (() => {
     if (privacy) return '🔒 私隱守護開啟 · 對話唔出雲端（離線）';
     if (cfg.provider === 'mock') return '離線示範模式（模擬回覆）';
     if (cfg.provider === 'ollama') return '真 LLM 模式 · 本地 Ollama（' + (cfg.model || 'llama3.2') + '）';
+    if (cfg.provider === 'shared') return '真 LLM 模式 · 管理員共享 Key（Supabase 資料表）';
     return '真 LLM 模式 · API（' + (cfg.model || '未設 model') + '）';
   }
 
@@ -609,6 +615,26 @@ const SetModule = (() => {
       '- 涉及金額數字要準確（VHIS 扣稅上限 HK$8,000/人、TVC HK$60,000/年）。\n' +
       '- 唔好講「保證回報」等違規字眼；合規優先。\n' +
       '- 如果對方想要話術／腳本，直接畀一段可以照抄用嘅版本。';
+  }
+
+  // ── 共享 Key：從 Supabase `app_secrets` 資料表讀取（需已登入，authenticated REST read）──
+  let _sharedCfgCache = null;
+  async function fetchSharedConfig() {
+    if (_sharedCfgCache) return _sharedCfgCache;
+    if (typeof APP_CONFIG === 'undefined' || !APP_CONFIG.supabase) throw new Error('未設定 Supabase');
+    const url = APP_CONFIG.supabase.url.replace(/\/$/, '') + '/rest/v1/app_secrets?select=key,value';
+    const headers = { 'apikey': APP_CONFIG.supabase.anonKey, 'Authorization': 'Bearer ' + ((typeof Auth !== 'undefined' && Auth.token) || '') };
+    const res = await fetch(url, { method: 'GET', headers });
+    if (!res.ok) throw new Error('讀取共享 Key 失敗 HTTP ' + res.status);
+    const rows = await res.json().catch(() => []);
+    const map = {};
+    (rows || []).forEach(r => { map[r.key] = r.value; });
+    _sharedCfgCache = {
+      apiKey: map['llm_api_key'] || '',
+      baseUrl: map['llm_base_url'] || '',
+      model: map['llm_model'] || ''
+    };
+    return _sharedCfgCache;
   }
 
   async function callLLM(text) {
@@ -629,12 +655,21 @@ const SetModule = (() => {
       return (data.message && data.message.content ? data.message.content : '').trim() || '(Ollama 冇回應內容)';
     }
 
-    // openai-compatible（OpenAI / Gemini / Groq / DeepSeek / OpenRouter…）
-    const base = (cfg.baseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
+    // shared：管理員共享 Key，經 Supabase 資料表（authenticated read）拎 key，再直接 call LLM provider
+    let useKey = cfg.apiKey, useBase = cfg.baseUrl, useModel = cfg.model;
+    if (cfg.provider === 'shared') {
+      if (typeof Auth === 'undefined' || !Auth.isLoggedIn) throw new Error('共享 Key 模式需要登入 Supabase（請先登入帳號）');
+      const sc = await fetchSharedConfig();
+      if (!sc || !sc.apiKey) throw new Error('管理員尚未設定共享 Key（請管理員喺 Supabase 填入 app_secrets）');
+      useKey = sc.apiKey; useBase = sc.baseUrl; useModel = sc.model;
+    }
+
+    // openai-compatible（OpenAI / Gemini / Groq / DeepSeek / OpenRouter / SiliconFlow…）
+    const base = (useBase || 'https://api.openai.com/v1').replace(/\/$/, '');
     const res = await fetch(base + '/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apiKey },
-      body: JSON.stringify({ model: cfg.model || 'gpt-4o-mini', messages: messages, temperature: 0.7 })
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + useKey },
+      body: JSON.stringify({ model: useModel || 'gpt-4o-mini', messages: messages, temperature: 0.7 })
     });
     if (!res.ok) {
       let msg = 'API HTTP ' + res.status;
@@ -755,17 +790,25 @@ const SetModule = (() => {
 
   async function consultantLLM(text) {
     const cfg = getLLMConfig();
+    let _sc = null;
+    if (cfg.provider === 'shared') {
+      if (typeof Auth === 'undefined' || !Auth.isLoggedIn) throw new Error('共享 Key 模式需要登入 Supabase（請先登入帳號）');
+      _sc = await fetchSharedConfig();
+      if (!_sc || !_sc.apiKey) throw new Error('管理員尚未設定共享 Key（請管理員喺 Supabase 填入 app_secrets）');
+    }
+    const base = ((cfg.provider === 'shared' ? _sc.baseUrl : cfg.baseUrl) || 'https://api.openai.com/v1').replace(/\/$/, '');
+    const apiKey = (cfg.provider === 'shared' ? _sc.apiKey : cfg.apiKey);
+    const apiModel = (cfg.provider === 'shared' ? _sc.model : cfg.model);
     const context = buildContextInjection(text);
     const sys = consultantSystem() + context;
     const history = conversation.slice(-40); // 限制 token 用量，保留最近 40 個回合
     const messages = [{ role: 'system', content: sys }];
     history.forEach(m => { if (m.role === 'user' || m.role === 'assistant') messages.push({ role: m.role, content: m.content }); });
     messages.push({ role: 'user', content: text });
-    const base = (cfg.baseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
     const mk = (msgs, tools) => fetch(base + '/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apiKey },
-      body: JSON.stringify({ model: cfg.model, messages: msgs, tools: tools || undefined, tool_choice: tools ? 'auto' : undefined, temperature: 0.5 })
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({ model: apiModel, messages: msgs, tools: tools || undefined, tool_choice: tools ? 'auto' : undefined, temperature: 0.5 })
     });
     let res = await mk(messages, ASSISTANT_TOOLS);
     if (!res.ok) { let e = 'API ' + res.status; try { const j = await res.json(); if (j.error && j.error.message) e += ': ' + j.error.message; } catch (_) {} throw new Error(e); }
@@ -942,6 +985,9 @@ const SetModule = (() => {
     const wrap = $('setLlmFields');
     const hint = $('setLlmHint');
     if (!wrap) return;
+    const forced = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.llm && APP_CONFIG.llm.provider === 'shared');
+    const sel = $('setLlmProvider');
+    if (sel) sel.disabled = !!forced;
     const p = cfg.provider;
     let html = '';
     if (p === 'ollama') {
@@ -953,6 +999,8 @@ const SetModule = (() => {
              '<div class="form-group"><label class="form-label" style="color:var(--navy)">API Key</label><input id="setLlmKey" type="password" class="form-input" value="' + (cfg.apiKey || '') + '" placeholder="sk-...（OpenAI / OpenRouter key）"></div>' +
              '<div class="form-group"><label class="form-label" style="color:var(--navy)">模型</label><input id="setLlmModel" class="form-input" value="' + (cfg.model || '') + '" placeholder="gpt-4o-mini / gemini-2.0-flash / claude-3-haiku"></div>';
       if (hint) hint.innerHTML = '支援任何 OpenAI-compatible 外國端點（NVIDIA / OpenRouter / OpenAI / Google）。Key 只存在你瀏覽器 localStorage，唔會上傳任何 server。推薦用 <b>NVIDIA NIM</b>（build.nvidia.com）完全免費無限額，唔使信用卡。';
+    } else if (p === 'shared') {
+      if (hint) hint.innerHTML = (forced ? '🔒 管理員已鎖定此模式。' : '') + '經 Supabase 資料表用<b>管理員共享 Key</b>，所有同事登入後自動用、唔洗填 API Key。Key 由管理員喺 Supabase SQL Editor 填入 <code>app_secrets</code> 一次（見 SET_SHARED_KEY_SETUP.sql）。需要已登入 Supabase 帳號。';
     } else {
       if (hint) hint.innerHTML = '離線示範模式用內建模擬回覆，唔使任何設定，啟動即用。想用真 LLM 請揀上面兩個。';
     }
@@ -979,6 +1027,7 @@ const SetModule = (() => {
   // NVIDIA NIM（build.nvidia.com）：完全免費、無限額、40 RPM、開源大額模型、OpenAI-compatible
   // OpenRouter（openrouter.ai）：免費模型（:free 後綴）、20 RPM、多模型閘道
   const LLM_PRESETS = {
+    shared:      { label: '管理員共享 Key（唔使填）', provider: 'shared', baseUrl: '', model: '' },
     nvidia:      { label: 'NVIDIA（免費無限）',    provider: 'openai', baseUrl: 'https://integrate.api.nvidia.com/v1', model: 'meta/llama-4-maverick' },
     openrouter:  { label: 'OpenRouter（免費）',    provider: 'openai', baseUrl: 'https://openrouter.ai/api/v1',       model: 'meta-llama/llama-3.3-70b-instruct:free' },
     mock:        { label: '離線示範',              provider: 'mock',   baseUrl: '', model: '' }

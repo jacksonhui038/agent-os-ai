@@ -85,6 +85,25 @@ create policy "user_settings_owner_all" on public.user_settings
   for all using (id = auth.uid()) with check (id = auth.uid());
 
 -- ============================================================
+-- 7. app_secrets 表（管理員共享 LLM Key，SET 智能體用）
+--    所有已登入用戶可讀取（SET 前端靠 user JWT 拎 Key，再直接 call LLM provider）；
+--    寫入由管理員喺 SQL Editor 做（service role，唔受 RLS 限制）。
+--    填入 Key 嘅 SQL 見 SET_SHARED_KEY_SETUP.sql。
+-- ============================================================
+create table if not exists public.app_secrets (
+  key   text primary key,
+  value text not null
+);
+
+alter table public.app_secrets enable row level security;
+
+-- 已登入用戶可以讀（唔開放比 anon，避免公開 Key）
+drop policy if exists "app_secrets_authenticated_read" on public.app_secrets;
+create policy "app_secrets_authenticated_read" on public.app_secrets
+  for select using (auth.role() = 'authenticated');
+
+-- ============================================================
 -- 完成！之後喺 config.js 填 Project URL + anon key 就可用。
 -- 同事用 email + 密碼註冊/登入，資料自動隔離同雲端同步。
+-- SET 智能體用 'shared' 模式時，管理員再 run 一次 SET_SHARED_KEY_SETUP.sql 填入 LLM Key。
 -- ============================================================

@@ -66,7 +66,9 @@ const lastBotText = () => {
   ok(!/真 LLM 呼叫失敗/.test(lastBotText()), '敏感模式：回覆來自離線 mock（無雲端嘗試）');
 
   // ── 3. 對照：關閉敏感模式，provider=openai 但 key 空 → pre-check 截住出友好提示 ──
+  // （shared-key 功能改咗 APP_CONFIG.llm.provider 預設為 'shared'，呢度強制 openai 嚟驗證 openai 空 key pre-check）
   window.localStorage.setItem('set_privacy_mode', 'off');
+  vm.runInContext("APP_CONFIG.llm.provider='openai';", ctx);
   window.localStorage.setItem('set_llm_config', JSON.stringify({ provider:'openai', baseUrl:'https://api.openai.com/v1', apiKey:'', model:'gpt-4o-mini' }));
   setFetch(0);
   doc.getElementById('setMsgInput').value = '幫我寫段開 case 話術';

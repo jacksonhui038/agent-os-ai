@@ -924,21 +924,28 @@
       if (it.flag) { drawFlag(ctx, it.flag, fx, fy, fw, fh); }
       const isz = W * 0.045;
       drawIcon(ctx, it.icon, cardR - isz, cy + cardH * 0.56, isz, lux ? gold : tpl.accent);
-      // 文字
+      // 文字（標題 + 副標題）垂直居中，行距足夠唔會重疊
       const textX = bx + r + W * 0.04;
       const textW = Math.max(cardR - textX - rightReserve, W * 0.4);
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       ctx.fillStyle = textCol;
-      ctx.font = font(700, Math.round(base * 0.037));
+      const titleSize = Math.round(base * 0.033);
+      const titleLh = base * 0.050; // 行距加大，避免兩行黏埋
+      const subSize = Math.round(base * 0.026);
+      const subLh = base * 0.040;
+      const titleSubGap = base * 0.018; // 標題副標題間距
+      ctx.font = font(700, titleSize);
       const tl = wrapText(ctx, it.title || '', ctx.font, textW, 2);
-      const lh = base * 0.044;
-      const tStart = by - (tl.length > 1 ? lh * 0.5 : 0);
-      tl.forEach((ln, i) => ctx.fillText(ln, textX, tStart + i * lh));
+      const titleBlockH = tl.length * titleLh;
+      const subBlockH = it.subtitle ? subLh + titleSubGap : 0;
+      const totalTextH = titleBlockH + subBlockH;
+      const firstY = by - totalTextH / 2 + titleLh / 2;
+      tl.forEach((ln, i) => ctx.fillText(ln, textX, firstY + i * titleLh));
       if (it.subtitle) {
         ctx.fillStyle = subTextCol;
-        ctx.font = font(500, Math.round(base * 0.028));
+        ctx.font = font(500, subSize);
         const sl = wrapText(ctx, it.subtitle, ctx.font, textW, 1);
-        if (sl[0]) ctx.fillText(sl[0], textX, tStart + lh + base * 0.006);
+        if (sl[0]) ctx.fillText(sl[0], textX, firstY + titleBlockH + titleSubGap);
       }
     });
 

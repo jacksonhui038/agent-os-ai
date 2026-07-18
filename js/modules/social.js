@@ -3028,7 +3028,7 @@
     if (show) renderMarketFocusPanel();
   }
   function generateMarketFocus() {
-    const agent = (document.getElementById('mfAgent').value || '').trim() || 'Tsang Oi Ting';
+    const agent = (document.getElementById('mfAgent').value || '').trim() || 'HUI YUEN SHU JACKSON';
     const date = (document.getElementById('mfDate').value || '').trim() || todayCN();
     const tagline = (document.getElementById('mfTagline').value || '').trim() || '專業 · 誠信 · 穩健';
     const cta = (document.getElementById('mfCta').value || '').trim() || '私訊了解詳情';

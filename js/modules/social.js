@@ -360,6 +360,9 @@
   }
 
   // ===== 比例 → 像素 =====
+  // 高清倍數：canvas 內部像素 ×CANVAS_HD，顯示尺寸由 CSS(max-width:100%)縮回，
+  // 導出/下載更清晰。renderCover 所有尺寸基於 canvas.width/height，放大自然按比例，唔會走位。
+  const CANVAS_HD = 2;
   function ratioToDims(ratio) {
     switch (ratio) {
       case '1:1': return { w: 1080, h: 1080 };
@@ -1524,7 +1527,7 @@
     const canvas = document.getElementById('socialCanvas');
     if (canvas && tpl) {
       const dims = ratioToDims(ratio);
-      canvas.width = dims.w; canvas.height = dims.h;
+      canvas.width = dims.w * CANVAS_HD; canvas.height = dims.h * CANVAS_HD;
 
       let bgImage = null;
       if (getUseAiBackground() && getImageGenKey()) {
@@ -1659,7 +1662,7 @@
     MULTI_PLATFORMS.forEach(p => {
       const cv = document.getElementById('mpCanvas_' + p.key);
       if (!cv) return;
-      cv.width = p.dims.w; cv.height = p.dims.h;
+      cv.width = p.dims.w * CANVAS_HD; cv.height = p.dims.h * CANVAS_HD;
       try { renderCover(cv, tpl, data, bgImage); } catch (e) { console.warn(e); }
     });
 
@@ -1898,7 +1901,7 @@
     const tpl = (typeof COVER_TEMPLATES !== 'undefined' ? COVER_TEMPLATES : []).find(t => t.id === state.templateId);
     if (!tpl) return;
     const dims = ratioToDims(state.last.ratio);
-    cv.width = dims.w; cv.height = dims.h;
+    cv.width = dims.w * CANVAS_HD; cv.height = dims.h * CANVAS_HD;
     renderCover(cv, tpl, state.last);
   }
 
@@ -2887,7 +2890,7 @@
     items.forEach((it, idx) => {
       const cv = document.getElementById('batchCanvas_' + idx);
       if (!cv) return;
-      cv.width = 1080; cv.height = 1440;
+      cv.width = 1080 * CANVAS_HD; cv.height = 1440 * CANVAS_HD;
       const built = buildContent(it.topic, 'xhs', '3:4', style, persona, '', 'post', null, it.tpl, it.rich);
       const data = { title: it.topic, tagline: built.hook, points: built.keyPoints };
       seriesState.active = true; seriesState.ep = it.ep; seriesState.name = seriesName;
@@ -3059,7 +3062,7 @@
       </div>
     </div>`;
     const cv = document.getElementById('mfCanvas');
-    cv.width = dims.w; cv.height = dims.h;
+    cv.width = dims.w * CANVAS_HD; cv.height = dims.h * CANVAS_HD;
     try { renderCover(cv, tpl, data); } catch (e) { console.warn(e); }
     try {
       Storage.addHistory({ type: 'social', topic: '每日市場焦點', platform: 'multi', ratio, templateId: tpl.id, templateName: tpl.name, title: '每日市場焦點' });

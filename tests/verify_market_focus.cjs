@@ -91,7 +91,7 @@ window.SocialModule.renderMarketFocusPanel();
 ok(!!window.document.getElementById('mfTitle_1'), 'renderMarketFocusPanel 建立咗 3 個新聞輸入');
 window.SocialModule.generateMarketFocus();
 const cv = window.document.getElementById('mfCanvas');
-ok(cv && cv.width === 1080 && cv.height === 1350, 'generateMarketFocus 生成 mfCanvas（1080×1350）');
+ok(cv && cv.width === 2160 && cv.height === 2700, 'generateMarketFocus 生成 mfCanvas 高清（2160×2700 = 1080×1350 ×2）');
 
 console.log('\n=== 每日市場焦點測試: ' + pass + ' passed, ' + fail + ' failed ===');
 process.exit(fail > 0 ? 1 : 0);

@@ -247,6 +247,45 @@
 
           <div class="form-group" id="seriesPanel" style="border:1px dashed var(--border);padding:14px;border-radius:var(--radius-sm);background:#fef9f3"></div>
 
+          <div class="form-group" id="marketFocusPanel" style="border:1px dashed var(--border);padding:14px;border-radius:var(--radius-sm);background:#eef6ff;display:none">
+            <label class="form-label">📊 每日市場焦點（金融快訊圖 · 似你張圖）</label>
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">代理人名稱</label>
+                <input type="text" class="form-input" id="mfAgent" placeholder="Tsang Oi Ting" value="Tsang Oi Ting">
+              </div>
+              <div class="form-group">
+                <label class="form-label">日期（留空=今日）</label>
+                <input type="text" class="form-input" id="mfDate" placeholder="2026年7月17日">
+              </div>
+            </div>
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">標語</label>
+                <input type="text" class="form-input" id="mfTagline" value="專業 · 誠信 · 穩健">
+              </div>
+              <div class="form-group">
+                <label class="form-label">行動呼籲 CTA</label>
+                <input type="text" class="form-input" id="mfCta" value="私訊了解詳情">
+              </div>
+            </div>
+            <div id="mfItems"></div>
+            <div class="grid-2" style="margin-top:8px">
+              <div class="form-group">
+                <label class="form-label">版本</label>
+                <select class="form-select" id="mfVersion">
+                  <option value="clean">簡潔版（淺色）</option>
+                  <option value="lux">華麗版（深色＋金色＋國旗）</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">&nbsp;</label>
+                <button class="btn btn-sm btn-primary" onclick="SocialModule.generateMarketFocus()">生成市場焦點圖</button>
+              </div>
+            </div>
+            <p class="cover-tip">想自動擺今日投資新聞？可以加「一撳擷取新聞」功能（要接新聞來源／RSS）。詳情睇返下面回覆。</p>
+          </div>
+
           <div class="form-group" style="border:1px dashed var(--border);padding:14px;border-radius:var(--radius-sm);background:#f8fafc">
             <label class="form-label">🔍 即時搜尋爆款範本（小紅書 / 抖音 / IG）</label>
             <div style="display:flex;gap:8px;margin-bottom:8px">
@@ -272,6 +311,9 @@
           </div>
           <div style="display:flex;gap:10px;margin-top:10px">
             <button class="btn btn-lg btn-block" style="background:linear-gradient(90deg,#0ea5e9,#38bdf8);color:#fff;border:none" onclick="SocialModule.generateExtraPlatforms()">🌐 出更多平台文案（微信／WhatsApp／抖音／TG／LinkedIn）</button>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:10px">
+            <button class="btn btn-lg btn-block" style="background:linear-gradient(90deg,#1e3a8a,#3b82f6);color:#fff;border:none" onclick="SocialModule.toggleMarketFocusPanel()">📊 每日市場焦點（金融快訊圖）</button>
           </div>
 
           <div class="output-box" id="socialOutput"></div>

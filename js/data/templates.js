@@ -832,5 +832,17 @@ const COVER_TEMPLATES = [
     bg:{from:'#eff6ff',to:'#dbeafe',dir:'v'},
     badge:{text:'可愛',bg:'#3b82f6',color:'#ffffff'},
     titleColor:'#1e3a8a', titleWeight:900, subColor:'#1d4ed8', bulletColor:'#1e3a8a',
-    footer:{text:'Jackson Hui',color:'#1d4ed8'}, decor:'circles', accent:'#3b82f6', mascot:'🐧' }
+    footer:{text:'Jackson Hui',color:'#1d4ed8'}, decor:'circles', accent:'#3b82f6', mascot:'🐧' },
+
+  // —— 每日市場焦點（金融快訊圖：標題＋3 新聞卡＋代理人簽名）——
+  { id:'market-focus', name:'每日市場焦點', cat:'專業', layout:'market_focus', lux:false,
+    bg:{from:'#f8fafc',to:'#e8eef6',dir:'v'},
+    badge:{text:'每日市場焦點',bg:'#1e3a8a',color:'#ffffff'},
+    titleColor:'#0f172a', titleWeight:900, subColor:'#475569', bulletColor:'#1e293b',
+    footer:{text:'Jackson Hui',color:'#475569'}, decor:'none', accent:'#1e3a8a' },
+  { id:'market-focus-lux', name:'市場焦點·華麗版', cat:'高端', layout:'market_focus', lux:true,
+    bg:{from:'#0a0e27',to:'#1a1f4d',dir:'d'},
+    badge:{text:'每日市場焦點',bg:'#d4af37',color:'#1a1f4d'},
+    titleColor:'#f5d782', titleWeight:900, subColor:'#cbd5e1', bulletColor:'#f8fafc',
+    footer:{text:'Jackson Hui',color:'#d4af37'}, decor:'none', accent:'#d4af37' }
 ];

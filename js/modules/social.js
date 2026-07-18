@@ -426,6 +426,7 @@
     else if (tpl.layout === 'comic') renderComicLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
     else if (tpl.layout === 'cute') renderCuteLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
     else if (tpl.layout === 'photo') renderPhotoLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
+    else if (tpl.layout === 'market_focus') renderMarketFocus(ctx, tpl, data, W, H, pad, base, titleSize, font);
     else renderDefaultLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
 
     // 系列 EP 徽章（所有風格通用，右上角）
@@ -737,6 +738,217 @@
     const g = parseInt(c.substr(2, 2), 16) || 0;
     const b = parseInt(c.substr(4, 2), 16) || 0;
     return `rgba(${r},${g},${b},${a})`;
+  }
+
+  // —— 真國旗 / 圖標 helpers（每日市場焦點用）——
+  function drawStar(ctx, cx, cy, outer, inner, points) {
+    points = points || 5;
+    ctx.beginPath();
+    for (let i = 0; i < points * 2; i++) {
+      const r = i % 2 === 0 ? outer : inner;
+      const a = -Math.PI / 2 + i * Math.PI / points;
+      const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.fill();
+  }
+
+  // 簡化但可辨認嘅國旗（code: US/BR/KR/HK/CN/UK/JP；其他用 code 文字 fallback）
+  function drawFlag(ctx, code, x, y, w, h) {
+    code = (code || '').toUpperCase();
+    if (!code) return;
+    ctx.save();
+    roundRect(ctx, x, y, w, h, Math.min(3, w * 0.08)); ctx.clip();
+    if (code === 'US') {
+      const stripes = 13, sh = h / stripes;
+      for (let i = 0; i < stripes; i++) { ctx.fillStyle = i % 2 ? '#ffffff' : '#b22234'; ctx.fillRect(x, y + i * sh, w, sh + 0.5); }
+      const cw = w * 0.42, ch = h * 0.55;
+      ctx.fillStyle = '#3c3b6e'; ctx.fillRect(x, y, cw, ch);
+      ctx.fillStyle = '#fff';
+      const sr = Math.max(1, cw * 0.05);
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) { ctx.beginPath(); ctx.arc(x + cw * 0.2 + c * cw * 0.2, y + ch * 0.22 + r * ch * 0.3, sr, 0, Math.PI * 2); ctx.fill(); }
+    } else if (code === 'BR') {
+      ctx.fillStyle = '#009c3b'; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = '#ffdf00';
+      ctx.beginPath(); ctx.moveTo(x + w / 2, y + h * 0.16); ctx.lineTo(x + w * 0.86, y + h / 2); ctx.lineTo(x + w / 2, y + h * 0.84); ctx.lineTo(x + w * 0.14, y + h / 2); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#002776'; ctx.beginPath(); ctx.arc(x + w / 2, y + h / 2, h * 0.17, 0, Math.PI * 2); ctx.fill();
+    } else if (code === 'KR') {
+      ctx.fillStyle = '#fff'; ctx.fillRect(x, y, w, h);
+      const cx = x + w / 2, cy = y + h / 2, r = h * 0.3;
+      ctx.fillStyle = '#cd2e3a'; ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, Math.PI / 2); ctx.fill();
+      ctx.fillStyle = '#0047a0'; ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI / 2, -Math.PI / 2); ctx.fill();
+      ctx.fillStyle = '#000';
+      const bw = w * 0.07, bh = h * 0.05;
+      ctx.fillRect(cx - r * 0.7, y + h * 0.14, bw, bh); ctx.fillRect(cx - r * 0.4, y + h * 0.14, bw * 0.5, bh);
+      ctx.fillRect(cx + r * 0.3, y + h * 0.14, bw, bh); ctx.fillRect(cx + r * 0.55, y + h * 0.14, bw * 0.5, bh);
+      ctx.fillRect(cx - r * 0.7, y + h * 0.82 - bh, bw, bh); ctx.fillRect(cx - r * 0.4, y + h * 0.82 - bh, bw * 0.5, bh);
+      ctx.fillRect(cx + r * 0.3, y + h * 0.82 - bh, bw, bh); ctx.fillRect(cx + r * 0.55, y + h * 0.82 - bh, bw * 0.5, bh);
+      ctx.fillRect(x + w * 0.16, cy - bh / 2, bh, bw); ctx.fillRect(x + w * 0.16, cy - bh / 2 - bw * 0.5, bh, bw * 0.5);
+      ctx.fillRect(x + w * 0.82 - bh, cy - bh / 2, bh, bw); ctx.fillRect(x + w * 0.82 - bh - bw * 0.5, cy - bh / 2, bh, bw * 0.5);
+    } else if (code === 'HK') {
+      ctx.fillStyle = '#de2910'; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = '#fff';
+      const cx = x + w / 2, cy = y + h / 2, pr = h * 0.11;
+      for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i * 2 * Math.PI / 5; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * h * 0.17, cy + Math.sin(a) * h * 0.17, pr, 0, Math.PI * 2); ctx.fill(); }
+      ctx.fillStyle = '#de2910'; ctx.beginPath(); ctx.arc(cx, cy, pr * 0.5, 0, Math.PI * 2); ctx.fill();
+    } else if (code === 'CN') {
+      ctx.fillStyle = '#de2910'; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = '#ffde00';
+      drawStar(ctx, x + w * 0.2, y + h * 0.3, h * 0.15, h * 0.06, 5);
+      const sm = [[-0.16, 0.08], [-0.06, 0.16], [-0.02, 0.26], [-0.13, 0.3]];
+      sm.forEach(p => drawStar(ctx, x + w * 0.34 + p[0] * w, y + h * 0.16 + p[1] * h, h * 0.06, h * 0.025, 5));
+    } else if (code === 'UK') {
+      ctx.fillStyle = '#012169'; ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = h * 0.2;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y + h); ctx.moveTo(x + w, y); ctx.lineTo(x, y + h); ctx.stroke();
+      ctx.strokeStyle = '#c8102e'; ctx.lineWidth = h * 0.1;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y + h); ctx.moveTo(x + w, y); ctx.lineTo(x, y + h); ctx.stroke();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = h * 0.34;
+      ctx.beginPath(); ctx.moveTo(x + w / 2, y); ctx.lineTo(x + w / 2, y + h); ctx.moveTo(x, y + h / 2); ctx.lineTo(x + w, y + h / 2); ctx.stroke();
+    } else if (code === 'JP') {
+      ctx.fillStyle = '#fff'; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = '#bc002d'; ctx.beginPath(); ctx.arc(x + w / 2, y + h / 2, h * 0.3, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.fillStyle = '#cbd5e1'; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = '#334155'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = Math.round(h * 0.42) + 'px sans-serif';
+      ctx.fillText(code, x + w / 2, y + h / 2);
+    }
+    ctx.restore();
+  }
+
+  // 簡單線條圖標（每日市場焦點卡片用）
+  function drawIcon(ctx, name, x, y, s, color) {
+    if (!name) return;
+    ctx.save();
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = Math.max(2, s * 0.08); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const cx = x + s / 2, cy = y + s / 2;
+    if (name === 'clock') {
+      ctx.beginPath(); ctx.arc(cx, cy, s * 0.4, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - s * 0.25); ctx.moveTo(cx, cy); ctx.lineTo(cx + s * 0.18, cy); ctx.stroke();
+    } else if (name === 'rate') {
+      ctx.beginPath(); ctx.moveTo(x + s * 0.2, y + s * 0.78); ctx.lineTo(x + s * 0.8, y + s * 0.22); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + s * 0.55, y + s * 0.22); ctx.lineTo(x + s * 0.8, y + s * 0.22); ctx.lineTo(x + s * 0.8, y + s * 0.47); ctx.closePath(); ctx.stroke();
+    } else if (name === 'chart') {
+      const bw = s * 0.18;
+      [0.4, 0.65, 0.9].forEach((hh, i) => { const bx = x + s * 0.18 + i * s * 0.28; ctx.fillRect(bx, y + s * (1 - hh), bw, s * hh); });
+    } else if (name === 'building') {
+      ctx.strokeRect(x + s * 0.25, y + s * 0.2, s * 0.5, s * 0.7);
+      ctx.strokeRect(x + s * 0.2, y + s * 0.45, s * 0.6, s * 0.45);
+      for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { ctx.fillRect(x + s * 0.34 + i * s * 0.2, y + s * 0.3 + j * s * 0.18, s * 0.08, s * 0.08); }
+    } else if (name === 'bulb') {
+      ctx.beginPath(); ctx.arc(cx, y + s * 0.42, s * 0.28, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx, y + s * 0.72); ctx.lineTo(cx, y + s * 0.82); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + s * 0.38, y + s * 0.85); ctx.lineTo(x + s * 0.62, y + s * 0.85); ctx.stroke();
+    } else if (name === 'globe') {
+      ctx.beginPath(); ctx.arc(cx, cy, s * 0.4, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(cx, cy, s * 0.18, s * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + s * 0.1, cy); ctx.lineTo(x + s * 0.9, cy); ctx.stroke();
+    } else if (name === 'news') {
+      ctx.strokeRect(x + s * 0.2, y + s * 0.25, s * 0.6, s * 0.5);
+      ctx.beginPath(); ctx.moveTo(x + s * 0.3, y + s * 0.4); ctx.lineTo(x + s * 0.7, y + s * 0.4); ctx.moveTo(x + s * 0.3, y + s * 0.55); ctx.lineTo(x + s * 0.6, y + s * 0.55); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // ===== 每日市場焦點（金融快訊圖：標題＋日期＋3 新聞卡＋代理人簽名）=====
+  function renderMarketFocus(ctx, tpl, data, W, H, pad, base, titleSize, font) {
+    const lux = !!tpl.lux;
+    const gold = lux ? '#d4af37' : tpl.accent;
+    const titleCol = lux ? '#f5d782' : '#0f172a';
+    const subCol = lux ? 'rgba(203,213,225,0.9)' : '#475569';
+    const cardBg = lux ? 'rgba(255,255,255,0.05)' : 'rgba(30,58,138,0.05)';
+    const cardBorder = lux ? 'rgba(212,175,55,0.45)' : 'rgba(30,58,138,0.18)';
+    const textCol = lux ? '#f8fafc' : '#1e293b';
+    const subTextCol = lux ? 'rgba(148,163,184,0.95)' : '#64748b';
+
+    data = data || {};
+    const items = (data.items && data.items.length) ? data.items.slice(0, 3) : [
+      { flag: 'US', flag2: 'BR', icon: 'clock', title: '美國擬對巴西徵 25% 關稅', subtitle: '自下周三起，多項商品受影響' },
+      { flag: 'KR', icon: 'rate', title: '南韓一如預期加息 0.25 厘', subtitle: '指標利率升至 2.75%' },
+      { flag: 'HK', icon: 'chart', title: '香港投資管理公司表現亮眼', subtitle: '去年投資收入增 1.75 倍' }
+    ];
+
+    let y = pad;
+    // 標題
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillStyle = titleCol;
+    const tSize = Math.round(base * 0.082);
+    ctx.font = font(900, tSize);
+    ctx.fillText(data.title || '每日市場焦點', W / 2, y);
+    y += tSize * 1.3;
+    // 日期
+    if (data.date) {
+      ctx.fillStyle = lux ? gold : subCol;
+      ctx.font = font(600, Math.round(base * 0.034));
+      ctx.fillText(data.date, W / 2, y);
+      y += base * 0.055;
+    }
+    // 分隔線
+    ctx.strokeStyle = lux ? 'rgba(212,175,55,0.55)' : 'rgba(30,58,138,0.3)';
+    ctx.lineWidth = Math.max(2, W * 0.003);
+    ctx.beginPath(); ctx.moveTo(W * 0.32, y); ctx.lineTo(W * 0.68, y); ctx.stroke();
+    y += base * 0.05;
+
+    // 3 張新聞卡
+    const gap = base * 0.028;
+    const areaH = H - y - pad * 2.5;
+    const cardH = (areaH - gap * (items.length - 1)) / items.length;
+    items.forEach((it, idx) => {
+      const cy = y + cardH * idx + gap * idx;
+      // 卡底
+      ctx.fillStyle = cardBg;
+      roundRect(ctx, pad, cy, W - pad * 2, cardH, W * 0.016); ctx.fill();
+      ctx.strokeStyle = cardBorder; ctx.lineWidth = Math.max(1.5, W * 0.0025); ctx.stroke();
+      // 編號圓
+      const r = Math.min(W * 0.046, cardH * 0.3);
+      const bx = pad + W * 0.035, by = cy + cardH / 2;
+      ctx.fillStyle = gold;
+      ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = lux ? '#1a1f4d' : '#ffffff';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = font(800, Math.round(r * 0.9));
+      ctx.fillText(String(idx + 1), bx, by + r * 0.04);
+      // 右側：國旗 + 圖標
+      const fw = W * 0.045, fh = fw * 0.66;
+      let fx = W - pad - fw;
+      const fy = cy + cardH * 0.2;
+      if (it.flag2) { drawFlag(ctx, it.flag2, fx, fy, fw, fh); fx -= fw + W * 0.012; }
+      if (it.flag) { drawFlag(ctx, it.flag, fx, fy, fw, fh); }
+      const isz = W * 0.045;
+      drawIcon(ctx, it.icon, W - pad - isz, cy + cardH * 0.56, isz, lux ? gold : tpl.accent);
+      // 文字
+      const textX = bx + r + W * 0.035;
+      const textW = (W - pad - W * 0.13) - textX;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = textCol;
+      ctx.font = font(700, Math.round(base * 0.037));
+      const tl = wrapText(ctx, it.title || '', ctx.font, textW, 2);
+      const lh = base * 0.044;
+      const tStart = by - (tl.length > 1 ? lh * 0.5 : 0);
+      tl.forEach((ln, i) => ctx.fillText(ln, textX, tStart + i * lh));
+      if (it.subtitle) {
+        ctx.fillStyle = subTextCol;
+        ctx.font = font(500, Math.round(base * 0.028));
+        const sl = wrapText(ctx, it.subtitle, ctx.font, textW, 1);
+        if (sl[0]) ctx.fillText(sl[0], textX, tStart + lh + base * 0.006);
+      }
+    });
+
+    // 底部代理人橫條
+    const barY = H - pad * 1.5;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (data.agent) {
+      ctx.fillStyle = lux ? gold : tpl.accent;
+      ctx.font = font(700, Math.round(base * 0.034));
+      ctx.fillText('您的代理人：' + data.agent, W / 2, barY - base * 0.028);
+    }
+    const foot = [data.cta, data.tagline].filter(Boolean).join('    ·    ');
+    if (foot) {
+      ctx.fillStyle = subCol;
+      ctx.font = font(500, Math.round(base * 0.027));
+      ctx.fillText(foot, W / 2, barY + base * 0.03);
+    }
   }
 
   // 資訊圖表步驟風（連接路徑 + 編號圖標卡，參考 hkwealthylife）
@@ -2766,6 +2978,91 @@
     appendExtraPlatforms(topic);
   }
 
+  // ===== 每日市場焦點：面板 + 生成 =====
+  function todayCN() {
+    const d = new Date();
+    return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+  }
+  const MF_FLAGS = ['US', 'BR', 'KR', 'HK', 'CN', 'UK', 'JP', ''];
+  const MF_ICONS = ['clock', 'rate', 'chart', 'building', 'bulb', 'globe', 'news', ''];
+  const MF_SAMPLES = [
+    { flag: 'US', flag2: 'BR', icon: 'clock', title: '美國擬對巴西徵 25% 關稅', subtitle: '自下周三起，多項商品受影響' },
+    { flag: 'KR', icon: 'rate', title: '南韓一如預期加息 0.25 厘', subtitle: '指標利率升至 2.75%' },
+    { flag: 'HK', icon: 'chart', title: '香港投資管理公司表現亮眼', subtitle: '去年投資收入增 1.75 倍' }
+  ];
+  function renderMarketFocusPanel() {
+    const host = document.getElementById('mfItems');
+    if (!host || host.dataset.built) return;
+    let html = '';
+    for (let i = 1; i <= 3; i++) {
+      const s = MF_SAMPLES[i - 1];
+      const flagOpts = MF_FLAGS.map(f => `<option value="${f}" ${f === s.flag ? 'selected' : ''}>${f || '無'}</option>`).join('');
+      const flag2Opts = MF_FLAGS.map(f => `<option value="${f}" ${f === s.flag2 ? 'selected' : ''}>${f || '無'}</option>`).join('');
+      const iconOpts = MF_ICONS.map(ic => `<option value="${ic}" ${ic === s.icon ? 'selected' : ''}>${ic || '無'}</option>`).join('');
+      html += `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px;background:#fff">
+        <b style="font-size:13px">新聞 ${i}</b>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:6px 0">
+          <select class="form-select" id="mfFlag1_${i}">${flagOpts}</select>
+          <select class="form-select" id="mfFlag2_${i}">${flag2Opts}</select>
+          <select class="form-select" id="mfIcon_${i}">${iconOpts}</select>
+        </div>
+        <input type="text" class="form-input" id="mfTitle_${i}" value="${s.title}" placeholder="標題" style="margin-bottom:6px">
+        <input type="text" class="form-input" id="mfSub_${i}" value="${s.subtitle}" placeholder="副標題／重點">
+      </div>`;
+    }
+    host.innerHTML = html;
+    host.dataset.built = '1';
+  }
+  function toggleMarketFocusPanel() {
+    const p = document.getElementById('marketFocusPanel');
+    if (!p) return;
+    const show = p.style.display === 'none' || !p.style.display;
+    p.style.display = show ? 'block' : 'none';
+    if (show) renderMarketFocusPanel();
+  }
+  function generateMarketFocus() {
+    const agent = (document.getElementById('mfAgent').value || '').trim() || 'Tsang Oi Ting';
+    const date = (document.getElementById('mfDate').value || '').trim() || todayCN();
+    const tagline = (document.getElementById('mfTagline').value || '').trim() || '專業 · 誠信 · 穩健';
+    const cta = (document.getElementById('mfCta').value || '').trim() || '私訊了解詳情';
+    const lux = document.getElementById('mfVersion').value === 'lux';
+    const items = [];
+    for (let i = 1; i <= 3; i++) {
+      const title = (document.getElementById('mfTitle_' + i).value || '').trim();
+      const subtitle = (document.getElementById('mfSub_' + i).value || '').trim();
+      if (!title && !subtitle) continue;
+      items.push({
+        flag: document.getElementById('mfFlag1_' + i).value,
+        flag2: document.getElementById('mfFlag2_' + i).value,
+        icon: document.getElementById('mfIcon_' + i).value,
+        title, subtitle
+      });
+    }
+    if (!items.length) { alert('請填至少一條市場新聞'); return; }
+    const tpl = (typeof COVER_TEMPLATES !== 'undefined' ? COVER_TEMPLATES : []).find(t => t.id === (lux ? 'market-focus-lux' : 'market-focus'));
+    if (!tpl) { alert('搵唔到 market_focus 範本'); return; }
+    const data = { title: '每日市場焦點', date, agent, tagline, cta, items };
+    const out = document.getElementById('socialOutput');
+    out.className = 'output-box filled';
+    const ratio = '4:5';
+    const dims = ratioToDims(ratio);
+    out.innerHTML = `<div class="proposal-section" style="border-color:#3b82f6">
+      <h4>📊 每日市場焦點${lux ? ' · 華麗版' : ''}</h4>
+      <div class="cover-wrap"><canvas id="mfCanvas" class="social-canvas"></canvas></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn btn-sm btn-primary" onclick="SocialModule.downloadMultiCover('mfCanvas','market_focus')">⬇️ 圖</button>
+        <button class="btn btn-sm btn-secondary" onclick="SocialModule.openMultiInCanva('xhs')">🎨 Canva</button>
+      </div>
+    </div>`;
+    const cv = document.getElementById('mfCanvas');
+    cv.width = dims.w; cv.height = dims.h;
+    try { renderCover(cv, tpl, data); } catch (e) { console.warn(e); }
+    try {
+      Storage.addHistory({ type: 'social', topic: '每日市場焦點', platform: 'multi', ratio, templateId: tpl.id, templateName: tpl.name, title: '每日市場焦點' });
+      if (typeof updateDashboardStats === 'function') updateDashboardStats();
+    } catch (e) {}
+  }
+
   window.generateSocialContent = generate;
   window.SocialModule = {
     init, rerenderWithSelected, markPublished, saveRedFoxKey, saveImageGenKey, toggleAiBackground,
@@ -2774,7 +3071,9 @@
     // A–F 小紅書強化
     savePersona, generateTags, scanCompliance, scanCurrentOutput,
     analyzeViral, rewriteViral, generateWeekBatch, copyAllBatch,
-    appendExtraPlatforms, generateExtraPlatforms
+    appendExtraPlatforms, generateExtraPlatforms,
+    // 每日市場焦點（金融快訊圖）
+    generateMarketFocus, toggleMarketFocusPanel, renderMarketFocusPanel
   };
   // 測試用內部 hook（唔影響一般用戶）
   window.SocialModule.__test = {
@@ -2794,6 +3093,7 @@
     getRichContent,
     detectDomain,
     COMPLIANCE_RULES,
-    EXTRA_PLATFORMS
+    EXTRA_PLATFORMS,
+    renderMarketFocus, drawFlag, drawIcon
   };
 })();

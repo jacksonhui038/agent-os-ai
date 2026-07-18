@@ -47,6 +47,7 @@ ok(COVER_TEMPLATES.some(t => t.id === 'market-focus-lux' && t.layout === 'market
 // 2. 函數暴露
 ok(typeof window.SocialModule.generateMarketFocus === 'function', 'SocialModule.generateMarketFocus 存在');
 ok(typeof window.SocialModule.toggleMarketFocusPanel === 'function', 'SocialModule.toggleMarketFocusPanel 存在');
+ok(typeof window.SocialModule.fetchTodayNews === 'function', 'SocialModule.fetchTodayNews 存在');
 ok(typeof window.SocialModule.__test.renderMarketFocus === 'function', '__test.renderMarketFocus 存在');
 ok(typeof window.SocialModule.__test.drawFlag === 'function', '__test.drawFlag 存在');
 ok(typeof window.SocialModule.__test.drawIcon === 'function', '__test.drawIcon 存在');

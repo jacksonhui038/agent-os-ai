@@ -2997,6 +2997,99 @@
     { flag: 'KR', icon: 'rate', title: '南韓一如預期加息 0.25 厘', subtitle: '指標利率升至 2.75%' },
     { flag: 'HK', icon: 'chart', title: '香港投資管理公司表現亮眼', subtitle: '去年投資收入增 1.75 倍' }
   ];
+  // 從新聞 description 抽副標題（去 HTML、取第一句或截斷）
+  function extractNewsSubtitle(desc) {
+    if (!desc) return '';
+    const text = desc.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const first = text.split(/[。！？\n]/)[0].trim();
+    if (first.length <= 55) return first;
+    return text.slice(0, 52) + '...';
+  }
+  // 根據標題/內容關鍵詞估國旗
+  function guessNewsFlags(text) {
+    const t = (text || '').toLowerCase();
+    const flags = [];
+    if (t.includes('香港') || t.includes('港股') || t.includes('港')) flags.push('HK');
+    if (t.includes('中國') || t.includes('內地') || t.includes('a股') || t.includes('人民幣')) flags.push('CN');
+    if (t.includes('美國') || t.includes('美股') || t.includes('聯儲') || t.includes('特朗普') || t.includes('美元')) flags.push('US');
+    if (t.includes('英國') || t.includes('英鎊') || t.includes('歐洲')) flags.push('UK');
+    if (t.includes('日本') || t.includes('日圓') || t.includes('日股')) flags.push('JP');
+    if (t.includes('韓國') || t.includes('南韓')) flags.push('KR');
+    if (t.includes('巴西')) flags.push('BR');
+    return flags.slice(0, 2); // 最多兩面旗
+  }
+  // 根據標題/內容估圖標
+  function guessNewsIcon(text) {
+    const t = (text || '').toLowerCase();
+    if (t.includes('利率') || t.includes('加息') || t.includes('降息') || t.includes('通脹') || t.includes('通縮') || t.includes('匯率') || t.includes('貨幣')) return 'rate';
+    if (t.includes('股') || t.includes('指數') || t.includes('大市') || t.includes('收市') || t.includes('港股') || t.includes('美股')) return 'chart';
+    if (t.includes('公司') || t.includes('企業') || t.includes('盈利') || t.includes('業績') || t.includes('港交所')) return 'building';
+    if (t.includes('關稅') || t.includes('貿易') || t.includes('協議') || t.includes('談判') || t.includes('全球')) return 'globe';
+    if (t.includes('油') || t.includes('金') || t.includes('商品') || t.includes('價格')) return 'news';
+    return 'clock';
+  }
+  async function fetchTodayNews() {
+    const btn = document.getElementById('mfFetchNews');
+    const orig = btn ? btn.innerHTML : '📡 一撳擷取今日財經新聞';
+    const setBusy = (b) => { if (btn) { btn.disabled = b; btn.innerHTML = b ? '⏳ 擷取中...' : orig; } };
+    setBusy(true);
+    try {
+      // 優先用香港 RTHK 財經，其次香港政府財經，最後 Yahoo Finance 英文財經
+      const feeds = [
+        'https://rthk.hk/rthk/news/rss/c_expressnews_cfinance.xml',
+        'https://www.news.gov.hk/tc/categories/finance/html/articlelist.rss.xml',
+        'https://feeds.finance.yahoo.com/rss/2.0/headline'
+      ];
+      let allItems = [];
+      let usedFeed = '';
+      for (const feedUrl of feeds) {
+        try {
+          const apiUrl = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feedUrl) + '&_=' + Date.now();
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 8000);
+          const res = await fetch(apiUrl, { signal: controller.signal });
+          clearTimeout(timer);
+          if (!res.ok) continue;
+          const data = await res.json();
+          if (data.status === 'ok' && Array.isArray(data.items) && data.items.length) {
+            allItems = data.items;
+            usedFeed = feedUrl;
+            break;
+          }
+        } catch (e) {}
+      }
+      if (!allItems.length) throw new Error('暫時搵唔到財經新聞，請手動輸入');
+      // 優先揀 24 小時內嘅新聞，若唔夠 3 條就 fallback 最新
+      const now = new Date().getTime();
+      const dayAgo = now - 24 * 60 * 60 * 1000;
+      const recent = allItems.filter(it => {
+        try { return new Date(it.pubDate).getTime() > dayAgo; } catch (e) { return false; }
+      });
+      const top = (recent.length >= 3 ? recent : allItems).slice(0, 3);
+      for (let i = 1; i <= 3; i++) {
+        const it = top[i - 1];
+        if (!it) continue;
+        const titleEl = document.getElementById('mfTitle_' + i);
+        const subEl = document.getElementById('mfSub_' + i);
+        const flag1El = document.getElementById('mfFlag1_' + i);
+        const flag2El = document.getElementById('mfFlag2_' + i);
+        const iconEl = document.getElementById('mfIcon_' + i);
+        if (titleEl) titleEl.value = it.title || '';
+        if (subEl) subEl.value = extractNewsSubtitle(it.description || '');
+        const flags = guessNewsFlags(it.title + ' ' + (it.description || ''));
+        if (flag1El) flag1El.value = flags[0] || '';
+        if (flag2El) flag2El.value = flags[1] || '';
+        if (iconEl) iconEl.value = guessNewsIcon(it.title + ' ' + (it.description || ''));
+      }
+      const dateEl = document.getElementById('mfDate');
+      if (dateEl) dateEl.value = todayCN();
+      alert('已填上最新 ' + top.length + ' 條財經新聞（來源：' + (usedFeed.includes('rthk') ? 'RTHK' : usedFeed.includes('gov.hk') ? '香港政府新聞' : 'Yahoo Finance') + '），你可以再編輯');
+    } catch (e) {
+      alert(e.message || '擷取新聞失敗');
+    } finally {
+      setBusy(false);
+    }
+  }
   function renderMarketFocusPanel() {
     const host = document.getElementById('mfItems');
     if (!host || host.dataset.built) return;
@@ -3080,7 +3173,7 @@
     analyzeViral, rewriteViral, generateWeekBatch, copyAllBatch,
     appendExtraPlatforms, generateExtraPlatforms,
     // 每日市場焦點（金融快訊圖）
-    generateMarketFocus, toggleMarketFocusPanel, renderMarketFocusPanel
+    generateMarketFocus, toggleMarketFocusPanel, renderMarketFocusPanel, fetchTodayNews
   };
   // 測試用內部 hook（唔影響一般用戶）
   window.SocialModule.__test = {

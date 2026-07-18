@@ -280,10 +280,13 @@
               </div>
               <div class="form-group">
                 <label class="form-label">&nbsp;</label>
-                <button class="btn btn-sm btn-primary" onclick="SocialModule.generateMarketFocus()">生成市場焦點圖</button>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button class="btn btn-sm btn-secondary" id="mfFetchNews" onclick="SocialModule.fetchTodayNews()">📡 一撳擷取今日財經新聞</button>
+                  <button class="btn btn-sm btn-primary" onclick="SocialModule.generateMarketFocus()">生成市場焦點圖</button>
+                </div>
               </div>
             </div>
-            <p class="cover-tip">想自動擺今日投資新聞？可以加「一撳擷取新聞」功能（要接新聞來源／RSS）。詳情睇返下面回覆。</p>
+            <p class="cover-tip">新聞來自 RTHK 財經 → 香港政府財經 → Yahoo Finance，優先揀 24 小時內最新 3 條，自動填標題、副標題、國旗、圖標。擷取後你可以再編輯。</p>
           </div>
 
           <div class="form-group" style="border:1px dashed var(--border);padding:14px;border-radius:var(--radius-sm);background:#f8fafc">

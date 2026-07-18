@@ -894,32 +894,36 @@
     const gap = base * 0.028;
     const areaH = H - y - pad * 2.5;
     const cardH = (areaH - gap * (items.length - 1)) / items.length;
+    const innerPad = W * 0.05;           // 卡內留白
+    const cardL = pad + innerPad;        // 卡內左邊界
+    const cardR = W - pad - innerPad;    // 卡內右邊界
+    const rightReserve = W * 0.13;       // 右邊留畀國旗 + icon
     items.forEach((it, idx) => {
       const cy = y + cardH * idx + gap * idx;
       // 卡底
       ctx.fillStyle = cardBg;
       roundRect(ctx, pad, cy, W - pad * 2, cardH, W * 0.016); ctx.fill();
       ctx.strokeStyle = cardBorder; ctx.lineWidth = Math.max(1.5, W * 0.0025); ctx.stroke();
-      // 編號圓
+      // 編號圓（靠卡內左邊界，唔凸出卡外）
       const r = Math.min(W * 0.046, cardH * 0.3);
-      const bx = pad + W * 0.035, by = cy + cardH / 2;
+      const bx = cardL + r, by = cy + cardH / 2;
       ctx.fillStyle = gold;
       ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = lux ? '#1a1f4d' : '#ffffff';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.font = font(800, Math.round(r * 0.9));
       ctx.fillText(String(idx + 1), bx, by + r * 0.04);
-      // 右側：國旗 + 圖標
+      // 右側：國旗 + 圖標（唔貼邊）
       const fw = W * 0.045, fh = fw * 0.66;
-      let fx = W - pad - fw;
+      let fx = cardR - fw;
       const fy = cy + cardH * 0.2;
       if (it.flag2) { drawFlag(ctx, it.flag2, fx, fy, fw, fh); fx -= fw + W * 0.012; }
       if (it.flag) { drawFlag(ctx, it.flag, fx, fy, fw, fh); }
       const isz = W * 0.045;
-      drawIcon(ctx, it.icon, W - pad - isz, cy + cardH * 0.56, isz, lux ? gold : tpl.accent);
+      drawIcon(ctx, it.icon, cardR - isz, cy + cardH * 0.56, isz, lux ? gold : tpl.accent);
       // 文字
-      const textX = bx + r + W * 0.035;
-      const textW = (W - pad - W * 0.13) - textX;
+      const textX = bx + r + W * 0.04;
+      const textW = Math.max(cardR - textX - rightReserve, W * 0.4);
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       ctx.fillStyle = textCol;
       ctx.font = font(700, Math.round(base * 0.037));

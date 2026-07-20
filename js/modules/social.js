@@ -1788,18 +1788,25 @@
     });
     html += `</div><div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-sm btn-secondary" onclick="SocialModule.copyAllMulti()">複製全部文案</button>
+      <button class="btn btn-sm btn-secondary" onclick="SocialModule.shareAllMulti()">📲 WhatsApp 全部</button>
       <button class="btn btn-sm btn-secondary" onclick="SocialModule.appendExtraPlatforms('${escapeHtml(topic).replace(/'/g, "\\'")}')">🌐 出更多平台文案（微信／WhatsApp／抖音／TG／LinkedIn）</button>
       <button class="btn btn-sm btn-secondary" onclick="SocialModule.scanCurrentOutput()">🛡️ 合規審查</button>
     </div><div id="mpExtraOut"></div><div id="mpComplianceOut"></div>`;
     out.innerHTML = html;
 
-    // 畫 3 張 canvas
-    MULTI_PLATFORMS.forEach(p => {
+    // 畫 5 張 canvas（帶進度）
+    showProgress('生成 ' + MULTI_PLATFORMS.length + ' 平台封面', MULTI_PLATFORMS.length);
+    for (let i = 0; i < MULTI_PLATFORMS.length; i++) {
+      const p = MULTI_PLATFORMS[i];
       const cv = document.getElementById('mpCanvas_' + p.key);
-      if (!cv) return;
-      cv.width = p.dims.w * CANVAS_HD; cv.height = p.dims.h * CANVAS_HD;
-      try { renderCover(cv, tpl, data, bgImage); } catch (e) { console.warn(e); }
-    });
+      if (cv) {
+        cv.width = p.dims.w * CANVAS_HD; cv.height = p.dims.h * CANVAS_HD;
+        try { renderCover(cv, tpl, data, bgImage); } catch (e) { console.warn(e); }
+      }
+      updateProgress(i + 1, MULTI_PLATFORMS.length);
+      await new Promise(r => setTimeout(r, 40));
+    }
+    hideProgress();
 
     try {
       Storage.addHistory({ type: 'social', topic, platform: 'multi', ratio: 'mixed', templateId: tpl.id, templateName: tpl.name, title: topic, caption: captions.ig });
@@ -1848,6 +1855,135 @@
     const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
     try { document.execCommand('copy'); alert('已複製全部 ' + MULTI_PLATFORMS.length + ' 個平台文案'); } catch (e) { alert('複製失敗，請手動選取'); }
     document.body.removeChild(ta);
+  }
+
+  // ===== 進度條 / WhatsApp 分享 / 銷售圖批量 =====
+  // 生成進度條（#5 任務進度 UI）
+  function showProgress(label, total) {
+    let bar = document.getElementById('genProgress');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'genProgress';
+      bar.className = 'gen-progress';
+      bar.innerHTML = '<div class="gen-progress-label"></div><div class="gen-progress-track"><div class="gen-progress-fill"></div></div>';
+    }
+    bar.querySelector('.gen-progress-label').textContent = label;
+    bar.querySelector('.gen-progress-fill').style.width = '0%';
+    bar.style.opacity = '1';
+    const host = document.getElementById('socialOutput');
+    if (host && host.parentNode) host.parentNode.insertBefore(bar, host);
+    else document.body.appendChild(bar);
+    return bar;
+  }
+  function updateProgress(done, total) {
+    const bar = document.getElementById('genProgress');
+    if (!bar) return;
+    const pct = total ? Math.round(done / total * 100) : 0;
+    const fill = bar.querySelector('.gen-progress-fill');
+    if (fill) fill.style.width = pct + '%';
+    const lbl = bar.querySelector('.gen-progress-label');
+    if (lbl) lbl.textContent = '生成中 ' + done + '/' + total + '（' + pct + '%）';
+    if (done >= total) setTimeout(() => { if (bar) bar.style.opacity = '0'; }, 700);
+  }
+  function hideProgress() { const b = document.getElementById('genProgress'); if (b) b.remove(); }
+
+  // WhatsApp 分享 deep link（#1 前端替代：預填文案，撳一下開 WhatsApp 發送）
+  function shareWhatsApp(text, phone) {
+    const t = (text || '').toString().trim();
+    if (!t) { alert('冇嘢可以分享'); return; }
+    const url = 'https://wa.me/' + (phone ? phone : '') + '?text=' + encodeURIComponent(t);
+    window.open(url, '_blank');
+  }
+  function shareAllMulti() {
+    const parts = [];
+    MULTI_PLATFORMS.forEach(p => { const el = document.getElementById('mpCap_' + p.key); if (el) parts.push('【' + p.name + '】\n' + el.textContent); });
+    shareWhatsApp(parts.join('\n\n————————\n\n'));
+  }
+
+  // 銷售圖賣點（根據推薦項目名對應產品庫）
+  function salesPointsFor(rec, client) {
+    const raw = (typeof window.PRODUCTS !== 'undefined') ? window.PRODUCTS : null;
+    const products = (raw && typeof raw === 'object') ? Object.values(raw) : [];
+    const kw = { '醫療': '醫療', 'vhis': '醫療', '危疾': '危疾', '重疾': '危疾', '人壽': '人壽', '壽': '人壽', '意外': '意外', '儲蓄': '儲蓄', '退休': '儲蓄', 'mpf': '儲蓄', '重疾險': '危疾' };
+    let matched = null;
+    for (const k in kw) {
+      if (rec.toLowerCase().indexOf(k) >= 0) {
+        matched = products.find(p => (p.category || '').indexOf(kw[k]) >= 0 || (p.name || '').indexOf(kw[k]) >= 0);
+        if (matched) break;
+      }
+    }
+    if (matched) {
+      return [
+        matched.tagline || matched.name,
+        '月供 $' + (matched.monthlyFrom || '—') + ' 起' + (matched.taxDeductible ? '（可扣稅）' : ''),
+        '適合：' + (matched.bestFor || '一般客戶')
+      ];
+    }
+    return ['針對 ' + (client.name || '客戶') + ' 嘅保障缺口', rec + '：填補風險位', '持牌顧問免費一對一分析'];
+  }
+
+  let lastSalesDeck = null;
+  async function generateSalesDeck() {
+    const client = window._lastAnalyzedClient;
+    if (!client) { alert('請先喺「客戶分析」做分析，再返嚟出銷售圖'); return { ok: false }; }
+    const recs = (client.recommendations && client.recommendations.length) ? client.recommendations : ['一般保障規劃'];
+    const risks = (client.riskPriority && client.riskPriority.length) ? client.riskPriority : ['保障規劃'];
+    const items = [];
+    items.push({ title: client.name + ' 嘅保障缺口', tagline: '針對性配置建議', points: risks.slice(0, 3) });
+    recs.slice(0, 4).forEach((r, i) => {
+      items.push({ title: r, tagline: '推薦方案 ' + (i + 1), points: salesPointsFor(r, client) });
+    });
+    const deck = items.slice(0, 5);
+    const tpl = (typeof COVER_TEMPLATES !== 'undefined' ? COVER_TEMPLATES : []).find(t => t.layout === 'infographic') || COVER_TEMPLATES[0];
+
+    const out = document.getElementById('socialOutput');
+    if (!out) return { ok: false };
+    out.className = 'output-box filled';
+    lastSalesDeck = deck;
+
+    let html = '<div class="dup-warn" style="background:#eef2ff;border-color:#6366f1;color:#3730a3">📊 已根據「' + escapeHtml(client.name) + '」嘅分析，一口氣生成 <b>' + deck.length + '</b> 張銷售圖（infographic 風），每張可單獨下載 / 去 Canva 編輯 / WhatsApp 分享。</div><div class="mp-grid">';
+    deck.forEach((it, i) => {
+      const shareTxt = it.title + '\n' + it.points.join('\n');
+      html += `
+        <div class="mp-card">
+          <div class="mp-card-title">📊 銷售圖 ${i + 1}：${escapeHtml(it.title)}</div>
+          <div class="cover-wrap"><canvas id="sdCanvas_${i}" class="social-canvas"></canvas></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+            <button class="btn btn-sm btn-primary" onclick="SocialModule.downloadMultiCover('sdCanvas_${i}','${escapeHtml(client.name)}_銷售圖${i + 1}')">⬇️ 圖</button>
+            <button class="btn btn-sm btn-secondary" onclick="SocialModule.openSalesInCanva(${i})">🎨 Canva</button>
+            <button class="btn btn-sm btn-secondary" onclick="SocialModule.shareWhatsApp(decodeURIComponent('${encodeURIComponent(shareTxt)}'))">📲 WhatsApp</button>
+          </div>
+        </div>`;
+    });
+    html += `</div><div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-sm btn-secondary" onclick="SocialModule.shareAllSalesDeck()">📲 全部 WhatsApp</button>
+    </div><div id="sdExtraOut"></div>`;
+    out.innerHTML = html;
+
+    showProgress('生成客戶銷售圖', deck.length);
+    for (let i = 0; i < deck.length; i++) {
+      const cv = document.getElementById('sdCanvas_' + i);
+      if (cv) {
+        cv.width = 1080 * CANVAS_HD; cv.height = 1440 * CANVAS_HD;
+        const data = { title: deck[i].title, tagline: deck[i].tagline, points: deck[i].points };
+        try { renderCover(cv, tpl, data); } catch (e) { console.warn(e); }
+      }
+      updateProgress(i + 1, deck.length);
+      await new Promise(r => setTimeout(r, 50));
+    }
+    hideProgress();
+    return { ok: true, deck };
+  }
+  function openSalesInCanva(i) {
+    const cv = document.getElementById('sdCanvas_' + i);
+    if (cv) { const a = document.createElement('a'); a.download = 'SET_sales_' + i + '.png'; a.href = cv.toDataURL('image/png'); a.click(); }
+    window.open('https://www.canva.com/design?create&width=1080&height=1440', '_blank');
+    showCanvaTip();
+  }
+  function shareAllSalesDeck() {
+    if (!lastSalesDeck) return;
+    const text = lastSalesDeck.map((it, i) => '【銷售圖 ' + (i + 1) + '】' + it.title + '\n' + it.points.join('\n')).join('\n\n');
+    shareWhatsApp(text);
   }
 
   // ===== 繁→簡映射（內地簡中雙版用）=====
@@ -4088,6 +4224,7 @@
     init, rerenderWithSelected, markPublished, saveRedFoxKey, toggleRedFoxKeyVisibility, saveImageGenKey, toggleAiBackground,
     searchTrendTemplates, applyTrend, useAiAvatar, clearAvatar, toggleSeries, openInCanva,
     generateMultiPlatform, generateRealistic, downloadMultiCover, openMultiInCanva, copyAllMulti, toggleLang,
+    generateSalesDeck, shareWhatsApp, shareAllMulti, shareAllSalesDeck, openSalesInCanva,
     // A–F 小紅書強化
     savePersona, generateTags, scanCompliance, scanCurrentOutput,
     analyzeViral, rewriteViral, generateWeekBatch, copyAllBatch,

@@ -423,9 +423,27 @@
 
   function hexToRgb(h) { return (h || '#1e3a5f').replace('#', '').toUpperCase(); }
 
+  // #1 WhatsApp 分享（前端 deep link 替代）：將建議書重點預填，撳一下開 WhatsApp 發送
+  function shareProposalWhatsApp() {
+    const client = getClient();
+    if (!client) { alert('請先選擇客戶'); return; }
+    const ids = selectedProducts.length ? selectedProducts : Array.from(document.querySelectorAll('.prop-chip.active')).map(e => e.dataset.val);
+    if (ids.length === 0) { alert('請至少選擇一個產品'); return; }
+    const products = buildProductDetails(ids, client);
+    const lines = ['【' + client.name + ' 保障建議書】'];
+    lines.push('客戶：' + client.name + '（' + (client.age || '-') + ' 歲 / ' + (client.job || '-') + '）');
+    lines.push('推薦方案：');
+    products.forEach(p => lines.push('• ' + p.name + '（' + p.insurer + '）月供 $' + p.monthlyFrom + ' 起' + (p.taxDeductible ? ' 可扣稅' : '')));
+    lines.push('');
+    lines.push('想了解最適合你嘅方案？歡迎 WhatsApp 我免費分析 🙌');
+    if (typeof SocialModule !== 'undefined' && SocialModule.shareWhatsApp) SocialModule.shareWhatsApp(lines.join('\n'));
+    else { const url = 'https://wa.me/?text=' + encodeURIComponent(lines.join('\n')); window.open(url, '_blank'); }
+  }
+
   // Expose to global
   window.generateProposal = generate;
   window.generateProposalPPT = generateProposalPPT;
+  window.shareProposalWhatsApp = shareProposalWhatsApp;
   window.ProposalModule = { init, goStep, onClientSelect, resetWizard };
   window.refreshPropClientSelects = refreshSelects;
 

@@ -126,7 +126,8 @@ ${vhisNote}${mpfNote}
       kids, notes,
       existingRaw: getCoverageLabels(),
       existingCoverage: getCoverageLabels().join('、'),
-      gaps
+      gaps,
+      riskPriority, recommendations
     };
     window._lastAnalyzedClient = lastAnalyzed;
 

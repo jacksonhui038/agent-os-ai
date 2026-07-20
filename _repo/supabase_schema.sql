@@ -1,0 +1,109 @@
+-- ============================================================
+-- Agent OS AI — Supabase Schema
+-- 喺 Supabase Dashboard → SQL Editor 貼入 run 一次
+-- 用途：俾每位同事各自登入，客戶/歷史資料按 user 隔離
+-- ============================================================
+
+-- ---------- 1. clients 表 ----------
+create table if not exists public.clients (
+  id          text primary key,
+  owner       uuid not null references auth.users (id) on delete cascade,
+  data        jsonb not null default '{}'::jsonb,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+-- ---------- 2. history 表 ----------
+create table if not exists public.history (
+  id          text primary key,
+  owner       uuid not null references auth.users (id) on delete cascade,
+  data        jsonb not null default '{}'::jsonb,
+  created_at  timestamptz not null default now()
+);
+
+-- ---------- 3. 開 RLS（行級安全）----------
+alter table public.clients enable row level security;
+alter table public.history enable row level security;
+
+-- 每位用戶只可以睇/改自己嘅資料
+drop policy if exists "clients_owner_all" on public.clients;
+create policy "clients_owner_all" on public.clients
+  for all using (owner = auth.uid()) with check (owner = auth.uid());
+
+drop policy if exists "history_owner_all" on public.history;
+create policy "history_owner_all" on public.history
+  for all using (owner = auth.uid()) with check (owner = auth.uid());
+
+-- ---------- 4. 性能 index ----------
+create index if not exists clients_owner_idx on public.clients (owner);
+create index if not exists history_owner_idx on public.history (owner);
+
+-- ============================================================
+-- 5. team_posts 表（全組共享「已發佈」記錄，避免重覆）
+-- ============================================================
+create table if not exists public.team_posts (
+  id          text primary key,
+  owner       uuid not null references auth.users (id) on delete cascade,
+  user_email  text,
+  data        jsonb not null default '{}'::jsonb,
+  created_at  timestamptz not null default now()
+);
+
+alter table public.team_posts enable row level security;
+
+-- 所有已登入用戶都可以讀取全組記錄；只可以修改自己嘅記錄
+drop policy if exists "team_posts_select_all" on public.team_posts;
+create policy "team_posts_select_all" on public.team_posts
+  for select using (auth.role() = 'authenticated');
+
+drop policy if exists "team_posts_owner_insert" on public.team_posts;
+create policy "team_posts_owner_insert" on public.team_posts
+  for insert with check (owner = auth.uid());
+
+drop policy if exists "team_posts_owner_delete" on public.team_posts;
+create policy "team_posts_owner_delete" on public.team_posts
+  for delete using (owner = auth.uid());
+
+create index if not exists team_posts_owner_idx on public.team_posts (owner);
+create index if not exists team_posts_data_topic_idx on public.team_posts ((data->>'topic'));
+
+-- ============================================================
+-- 6. user_settings 表（每個用戶自己嘅設定，例如 RedFox API Key）
+--    跨裝置同步：換 phone / 換 browser 登入後都會自動載返。
+-- ============================================================
+create table if not exists public.user_settings (
+  id          uuid primary key references auth.users (id) on delete cascade,
+  data        jsonb not null default '{}'::jsonb,
+  updated_at  timestamptz not null default now()
+);
+
+alter table public.user_settings enable row level security;
+
+-- 每位用戶只可以睇/改自己嘅設定
+drop policy if exists "user_settings_owner_all" on public.user_settings;
+create policy "user_settings_owner_all" on public.user_settings
+  for all using (id = auth.uid()) with check (id = auth.uid());
+
+-- ============================================================
+-- 7. app_secrets 表（管理員共享 LLM Key，SET 智能體用）
+--    所有已登入用戶可讀取（SET 前端靠 user JWT 拎 Key，再直接 call LLM provider）；
+--    寫入由管理員喺 SQL Editor 做（service role，唔受 RLS 限制）。
+--    填入 Key 嘅 SQL 見 SET_SHARED_KEY_SETUP.sql。
+-- ============================================================
+create table if not exists public.app_secrets (
+  key   text primary key,
+  value text not null
+);
+
+alter table public.app_secrets enable row level security;
+
+-- 已登入用戶可以讀（唔開放比 anon，避免公開 Key）
+drop policy if exists "app_secrets_authenticated_read" on public.app_secrets;
+create policy "app_secrets_authenticated_read" on public.app_secrets
+  for select using (auth.role() = 'authenticated');
+
+-- ============================================================
+-- 完成！之後喺 config.js 填 Project URL + anon key 就可用。
+-- 同事用 email + 密碼註冊/登入，資料自動隔離同雲端同步。
+-- SET 智能體用 'shared' 模式時，管理員再 run 一次 SET_SHARED_KEY_SETUP.sql 填入 LLM Key。
+-- ============================================================

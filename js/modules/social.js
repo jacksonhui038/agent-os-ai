@@ -3309,6 +3309,78 @@
     return { ok: true };
   }
 
+  // 專業 9:16 封面大字庫（短、整齊、唔截字）
+  const REELS_TITLE_TEMPLATES = {
+    ai: ['AI 日日幫你出內容', '告別手寫文案', '用 AI 做專業保險 IP', '保險內容自動化'],
+    xhs: ['小紅書保險獲客', '小紅書日日有內容', '中國社媒保險獲客'],
+    client: ['客戶主動搵上門', '高效獲客捷徑', '保險人點樣日日出 Post'],
+    medical: ['醫療保障內容', '重疾險文案攻略', '醫療險點樣講'],
+    savings: ['儲蓄理財文案', '分紅保單內容', '理財規劃攻略'],
+    default: ['保險人內容系統', '香港保險 · AI 出 Post', '專業保險內容']
+  };
+  function topicBucket(topic) {
+    const t = (topic || '').toLowerCase();
+    if (/小紅書|抖音|社媒|社交|獲客|引流/.test(t)) return 'xhs';
+    if (/客戶|獲客|開單|銷售|業績/.test(t)) return 'client';
+    if (/重疾|危疾|醫療|健康|保病|住院|自願醫保|vhis/.test(t)) return 'medical';
+    if (/儲蓄|理財|分紅|投資|儲錢|教育金|退休/.test(t)) return 'savings';
+    if (/ai|自動|文案|出 post|出片/.test(t)) return 'ai';
+    return 'default';
+  }
+  function chooseReelsTitle(topic) {
+    const bucket = topicBucket(topic);
+    const list = REELS_TITLE_TEMPLATES[bucket] || REELS_TITLE_TEMPLATES.default;
+    const clean = (topic || '').replace(/[。，、！？]/g, '').trim();
+    let idx = 0;
+    for (let i = 0; i < clean.length; i++) idx += clean.charCodeAt(i);
+    return list[idx % list.length];
+  }
+  function pickReelsBadge(topic) {
+    const t = (topic || '').toLowerCase();
+    if (/小紅書|社媒|中國社媒/.test(t)) return '小紅書獲客';
+    if (/抖音/.test(t)) return '抖音獲客';
+    if (/ai|自動|文案/.test(t)) return 'AI 保險內容';
+    if (/重疾|醫療|健康/.test(t)) return '醫療保障';
+    if (/儲蓄|理財|分紅/.test(t)) return '理財規劃';
+    return '保險人專用';
+  }
+  function breakReelsTitle(s, maxCharsPerLine) {
+    maxCharsPerLine = maxCharsPerLine || 9;
+    s = (s || '').replace(/[。，、！？]/g, '').trim();
+    if (!s) return [];
+    if (s.includes('｜')) {
+      const parts = s.split('｜').filter(Boolean);
+      return parts.slice(0, 3);
+    }
+    if (s.length <= maxCharsPerLine) return [s];
+    const lines = [];
+    let cur = '';
+    for (const ch of s) {
+      if (cur.length >= maxCharsPerLine) { lines.push(cur); cur = ch; }
+      else { cur += ch; }
+    }
+    if (cur) lines.push(cur);
+    return lines.slice(0, 3);
+  }
+
+  // 短視頻封面底部城市剪影（低調，唔遮字）
+  function drawReelsCity(ctx, W, H, color) {
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = color;
+    const baseY = H * 0.98;
+    let seed = 20260720;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    let x = 0;
+    while (x < W) {
+      const bw = W * (0.03 + rnd() * 0.05);
+      const bh = H * (0.06 + rnd() * 0.14);
+      ctx.fillRect(x, baseY - bh, bw, bh + H * 0.02);
+      x += bw + W * 0.008;
+    }
+    ctx.restore();
+  }
+
   // —— 9:16 短視頻封面（真人相 + 大字鉤子 + 平台 logo）——
   function generateReelsCover() {
     let topic = (document.getElementById('socialTopic') ? document.getElementById('socialTopic').value : '').trim();
@@ -3320,10 +3392,12 @@
     const hook = pickHook(topic, hookStyle);
     const tpl = (typeof COVER_TEMPLATES !== 'undefined' ? COVER_TEMPLATES : []).find(t => t.id === 'reels-cover');
     if (!tpl) { alert('搵唔到短視頻封面範本'); return; }
+    const title = chooseReelsTitle(topic);
+    const badgeText = pickReelsBadge(topic);
     const data = {
-      title: vsShorten(hook.text, 22),
-      tagline: (rich.entries && rich.entries[0]) ? rich.entries[0].t : topic,
-      badge: hook.cat === '權威' ? '全港首個' : '保險乾貨',
+      title,
+      tagline: '香港保險人 · AI 系統',
+      badge: badgeText,
       platform: ['小红书', '抖音'],
       cta: '👇 留言／關注 睇多啲'
     };
@@ -3396,11 +3470,19 @@
   }
 
   function renderReelsLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
-    // 中央光暈
-    const grad = ctx.createRadialGradient(W * 0.5, H * 0.28, base * 0.05, W * 0.5, H * 0.28, base * 0.9);
-    grad.addColorStop(0, hexToRgba(tpl.accent || '#ffd84d', 0.22));
-    grad.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+    // 專業背景：深藍漸層 + 底部城市剪影 + 暗角
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+    bgGrad.addColorStop(0, '#020617');
+    bgGrad.addColorStop(0.55, '#0f172a');
+    bgGrad.addColorStop(1, '#1e3a8a');
+    ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, W, H);
+    drawReelsCity(ctx, W, H, '#020617');
+    drawVignette(ctx, W, H);
+    // 頂部微光
+    const glow = ctx.createRadialGradient(W * 0.5, H * 0.18, base * 0.05, W * 0.5, H * 0.18, base * 0.9);
+    glow.addColorStop(0, hexToRgba(tpl.accent || '#ffd84d', 0.12));
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
     // 頂部紅色 badge（全港首個 之類）
@@ -3418,23 +3500,32 @@
     // 真人頭像圓框
     drawReelsAvatar(ctx, W / 2, H * 0.29, base * 0.23, tpl, font);
 
-    // 下半：大字標題
-    const tSize = Math.round(base * 0.11);
+    // 下半：大字標題（限定最多 3 行，每行最多 9 字，唔會截字）
+    const tSize = Math.round(base * 0.10);
+    const lineHeight = tSize * 1.25;
+    const lines = breakReelsTitle(data.title, 9).slice(0, 3);
+    const totalH = lines.length * lineHeight;
+    const titleCenterY = H * 0.54;
+    let firstY = titleCenterY - totalH / 2 + lineHeight / 2;
     ctx.font = font(900, tSize);
-    ctx.fillStyle = tpl.titleColor || '#ffffff';
-    const lines = wrapText(ctx, data.title || '', font(900, tSize), W - pad * 1.3, 3);
-    let ty = H * 0.55;
-    lines.forEach((ln, i) => ctx.fillText(ln, W / 2, ty + i * tSize * 1.12));
-    ty += lines.length * tSize * 1.12;
+    ctx.textBaseline = 'middle';
+    lines.forEach((ln, i) => {
+      const y = firstY + i * lineHeight;
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillText(ln, W / 2 + tSize * 0.03, y + tSize * 0.03);
+      ctx.fillStyle = tpl.titleColor || '#ffffff';
+      ctx.fillText(ln, W / 2, y);
+    });
 
     // 副標題（金／accent 色）
     if (data.tagline) {
-      const sSize = Math.round(base * 0.05);
+      const sSize = Math.round(base * 0.045);
+      const sLh = sSize * 1.35;
       ctx.font = font(700, sSize);
       ctx.fillStyle = tpl.subColor || tpl.accent || '#ffd84d';
-      const sl = wrapText(ctx, data.tagline, font(700, sSize), W - pad * 1.5, 2);
-      sl.forEach((ln, i) => ctx.fillText(ln, W / 2, ty + base * 0.035 + i * sSize * 1.2));
-      ty += sl.length * sSize * 1.2 + base * 0.035;
+      const sl = breakReelsTitle(data.tagline, 13).slice(0, 2);
+      let subY = titleCenterY + totalH / 2 + base * 0.03;
+      sl.forEach((ln, i) => ctx.fillText(ln, W / 2, subY + i * sLh));
     }
 
     // 平台 logo 列
@@ -3731,6 +3822,7 @@
     EXTRA_PLATFORMS,
     renderMarketFocus, drawFlag, drawIcon, drawVictoriaHarbour, drawVignette,
     // 🎬 短視頻工作台測試 hook
-    buildVideoScript, pickHook, buildContentCalendar, renderReelsLayout, VIDEO_HOOKS, WEEK_PLAN
+    buildVideoScript, pickHook, buildContentCalendar, renderReelsLayout, VIDEO_HOOKS, WEEK_PLAN,
+    chooseReelsTitle, pickReelsBadge, breakReelsTitle, drawReelsCity
   };
 })();

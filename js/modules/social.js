@@ -607,6 +607,7 @@
   // 深色高端大字風（Alfred 風：黑底 + 金/白字 + 城市天際線 + 真人頭像）
   function renderLuxuryLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
     const hasAvatar = !!(tpl.avatar && avatarImage && avatarImage.width);
+    const isPerson = tpl.layout === 'person';
 
     if (hasAvatar) {
       // 右半部畫頭像（cover fit）
@@ -636,15 +637,19 @@
     }
 
     // 文字區：如果有頭像位，預留右邊空間
-    const leftZone = tpl.avatar ? Math.min(W * 0.58, W - pad * 2 - base * 0.18) : W - pad * 2;
-    const tx = pad;
-    let y = pad + (tpl.badge ? W * 0.12 : 0);
+    // person 真人風格大字容易頂到/過界，加安全內縮 + 縮細字 + 最多兩行
+    const safePad = isPerson ? Math.round(pad * 1.5) : pad;
+    const leftZone = tpl.avatar
+      ? Math.min(W * (isPerson ? 0.48 : 0.58), W - safePad * 2 - base * 0.18)
+      : W - safePad * 2;
+    const tx = safePad;
+    let y = safePad + (tpl.badge ? W * 0.12 : 0);
 
     // 標題（金漸變字）
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    const luxTitleSize = Math.round(titleSize * (hasAvatar ? 1.05 : 1.15));
+    const luxTitleSize = Math.round(titleSize * (hasAvatar ? (isPerson ? 0.72 : 1.05) : 1.15));
     const titleFont = font(tpl.titleWeight, luxTitleSize);
-    const lines = wrapText(ctx, data.title, titleFont, leftZone, 3);
+    const lines = wrapText(ctx, data.title, titleFont, leftZone, isPerson ? 2 : 3);
     const goldGrad = ctx.createLinearGradient(tx, y, tx, y + lines.length * luxTitleSize * 1.15);
     goldGrad.addColorStop(0, '#fff7d6'); goldGrad.addColorStop(0.5, tpl.subColor || '#d4af37'); goldGrad.addColorStop(1, '#b8860b');
     lines.forEach((ln, i) => {

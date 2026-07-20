@@ -3173,9 +3173,9 @@
     let html = '';
     for (let i = 1; i <= 3; i++) {
       const s = MF_SAMPLES[i - 1];
-      const flagOpts = MF_FLAGS.map(f => `<option value="${f}" ${f === s.flag ? 'selected' : ''}>${f || '無'}</option>`).join('');
-      const flag2Opts = MF_FLAGS.map(f => `<option value="${f}" ${f === s.flag2 ? 'selected' : ''}>${f || '無'}</option>`).join('');
-      const iconOpts = MF_ICONS.map(ic => `<option value="${ic}" ${ic === s.icon ? 'selected' : ''}>${ic || '無'}</option>`).join('');
+      const flagOpts = MF_FLAGS.map(f => `<option value="${f}" ${f === (s.flag || '') ? 'selected' : ''}>${f || '無'}</option>`).join('');
+      const flag2Opts = MF_FLAGS.map(f => `<option value="${f}" ${f === (s.flag2 || '') ? 'selected' : ''}>${f || '無'}</option>`).join('');
+      const iconOpts = MF_ICONS.map(ic => `<option value="${ic}" ${ic === (s.icon || '') ? 'selected' : ''}>${ic || '無'}</option>`).join('');
       html += `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px;background:#fff">
         <b style="font-size:13px">新聞 ${i}</b>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:6px 0">

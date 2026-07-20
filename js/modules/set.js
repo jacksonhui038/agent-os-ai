@@ -894,7 +894,11 @@ const SetModule = (() => {
         reply = await consultantLLM(text);
       }
     } catch (e) {
-      reply = (isActionIntent(text) ? (await assistantOffline(text)) : (mockReplies[text] || fallbackReply(text))) + '\n\n⚠️ 真 LLM 失敗（' + e.message + '），已用離線助理。';
+      let extra = '\n\n⚠️ 真 LLM 失敗（' + e.message + '），已用離線助理。';
+      if (cfg.provider === 'shared') {
+        extra = '\n\n🔧 管理員共享 Key 無效（' + e.message + '）。請檢查 Supabase app_secrets 表嘅 llm_api_key 是否過期／被撤銷，或暫時將 js/data/config.js 嘅 llm.provider 改為 \'mock\'。';
+      }
+      reply = (isActionIntent(text) ? (await assistantOffline(text)) : (mockReplies[text] || fallbackReply(text))) + extra;
     }
     pushMessage('assistant', reply);
     removeTyping();

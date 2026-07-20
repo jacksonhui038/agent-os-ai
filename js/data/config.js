@@ -26,7 +26,7 @@ const APP_CONFIG = {
   //   注意：shared 模式需要已登入 Supabase（APP_CONFIG.supabase 有值）。
   //   想 revert 返每人自己填 key → 改返 'mock' 或 'openai'。
   llm: {
-    provider: 'mock',   // 臨時改回 mock：shared key 已失效，避免所有對話都彈 401
+    provider: 'shared',   // 管理員共享 Key（讀 Supabase app_secrets）；注意 base_url 要用 .cn 中國版端點
     baseUrl: '',
     apiKey: '',
     model: ''

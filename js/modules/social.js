@@ -3309,14 +3309,14 @@
     return { ok: true };
   }
 
-  // 專業 9:16 封面大字庫（短、整齊、唔截字）
+  // 專業 9:16 封面大字庫（持牌顧問／機構語氣，短、整齊、唔截字）
   const REELS_TITLE_TEMPLATES = {
-    ai: ['AI 日日幫你出內容', '告別手寫文案', '用 AI 做專業保險 IP', '保險內容自動化'],
-    xhs: ['小紅書保險獲客', '小紅書日日有內容', '中國社媒保險獲客'],
-    client: ['客戶主動搵上門', '高效獲客捷徑', '保險人點樣日日出 Post'],
-    medical: ['醫療保障內容', '重疾險文案攻略', '醫療險點樣講'],
-    savings: ['儲蓄理財文案', '分紅保單內容', '理財規劃攻略'],
-    default: ['保險人內容系統', '香港保險 · AI 出 Post', '專業保險內容']
+    ai: ['AI 內容系統', '智能內容生成', '自動化內容', '數字化獲客'],
+    xhs: ['內地社媒保險獲客', '小紅書專屬方案', '中國社媒保險布局', '跨境保險內容獲客'],
+    client: ['客戶主動上門', '精準客戶開發', '高淨值獲客', '名單持續增長'],
+    medical: ['危疾保障方案', '醫療保障規劃', '健康保障配置', '高端醫療方案'],
+    savings: ['儲蓄保障方案', '理財配置規劃', '資產傳承規劃', '退休金準備'],
+    default: ['專業保險顧問', '持牌保險顧問', '香港保險配置', '一站式保障']
   };
   function topicBucket(topic) {
     const t = (topic || '').toLowerCase();
@@ -3337,12 +3337,12 @@
   }
   function pickReelsBadge(topic) {
     const t = (topic || '').toLowerCase();
-    if (/小紅書|社媒|中國社媒/.test(t)) return '小紅書獲客';
-    if (/抖音/.test(t)) return '抖音獲客';
-    if (/ai|自動|文案/.test(t)) return 'AI 保險內容';
-    if (/重疾|醫療|健康/.test(t)) return '醫療保障';
-    if (/儲蓄|理財|分紅/.test(t)) return '理財規劃';
-    return '保險人專用';
+    if (/小紅書|抖音|社媒|中國社媒|獲客|引流/.test(t)) return '跨境獲客專家';
+    if (/客戶|開單|銷售|業績/.test(t)) return '精準獲客';
+    if (/重疾|危疾|醫療|健康|保病|住院|自願醫保|vhis/.test(t)) return '醫療保障';
+    if (/儲蓄|理財|分紅|投資|儲錢|教育金|退休|傳承/.test(t)) return '資產規劃';
+    if (/ai|自動|文案|出 post|出片/.test(t)) return 'AI 提效';
+    return '持牌顧問';
   }
   function breakReelsTitle(s, maxCharsPerLine) {
     maxCharsPerLine = maxCharsPerLine || 9;
@@ -3363,22 +3363,47 @@
     return lines.slice(0, 3);
   }
 
-  // 短視頻封面底部城市剪影（低調，唔遮字）
-  function drawReelsCity(ctx, W, H, color) {
+  // 9:16 短視頻封面奢華背景（私人銀行／持牌顧問質感：深藍黑漸層＋金色光環＋細金線＋暗角）
+  function drawReelsLuxBg(ctx, W, H, accent) {
+    // 深藍黑漸層
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#04070f');
+    g.addColorStop(0.5, '#0a1733');
+    g.addColorStop(1, '#050912');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    // 頂部金色光環（低透明度，似私人銀行 logo halo）
+    const cx = W * 0.5, cy = H * 0.26, R = W * 0.62;
+    const ring = ctx.createRadialGradient(cx, cy, R * 0.2, cx, cy, R);
+    ring.addColorStop(0, hexToRgba(accent, 0.18));
+    ring.addColorStop(0.6, hexToRgba(accent, 0.05));
+    ring.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = ring;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+
+    // 細金色同心弧（裝飾，唔搶戲）
     ctx.save();
-    ctx.globalAlpha = 0.35;
-    ctx.fillStyle = color;
-    const baseY = H * 0.98;
-    let seed = 20260720;
-    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
-    let x = 0;
-    while (x < W) {
-      const bw = W * (0.03 + rnd() * 0.05);
-      const bh = H * (0.06 + rnd() * 0.14);
-      ctx.fillRect(x, baseY - bh, bw, bh + H * 0.02);
-      x += bw + W * 0.008;
+    ctx.strokeStyle = hexToRgba(accent, 0.10);
+    ctx.lineWidth = Math.max(1.5, W * 0.0016);
+    for (let i = 1; i <= 3; i++) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * (0.42 + i * 0.16), Math.PI * 1.05, Math.PI * 1.95);
+      ctx.stroke();
     }
     ctx.restore();
+
+    // 下方細金線（似精緻賬冊分隔）
+    ctx.save();
+    ctx.strokeStyle = hexToRgba(accent, 0.12);
+    ctx.lineWidth = Math.max(1, W * 0.0012);
+    for (let i = 0; i < 4; i++) {
+      const y = H * (0.80 + i * 0.045);
+      ctx.beginPath(); ctx.moveTo(W * 0.12, y); ctx.lineTo(W * 0.88, y); ctx.stroke();
+    }
+    ctx.restore();
+
+    // 暗角
+    drawVignette(ctx, W, H);
   }
 
   // —— 9:16 短視頻封面（真人相 + 大字鉤子 + 平台 logo）——
@@ -3394,12 +3419,13 @@
     if (!tpl) { alert('搵唔到短視頻封面範本'); return; }
     const title = chooseReelsTitle(topic);
     const badgeText = pickReelsBadge(topic);
+    const advisorName = (tpl.footer && tpl.footer.text) ? tpl.footer.text : 'Jackson Hui';
     const data = {
       title,
-      tagline: '香港保險人 · AI 系統',
+      tagline: '認可保險顧問 · ' + advisorName,
       badge: badgeText,
       platform: ['小红书', '抖音'],
-      cta: '👇 留言／關注 睇多啲'
+      cta: '預約一對一保障分析'
     };
     const dims = ratioToDims('9:16');
     const out = document.getElementById('socialOutput');
@@ -3470,72 +3496,66 @@
   }
 
   function renderReelsLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
-    // 專業背景：深藍漸層 + 底部城市剪影 + 暗角
-    const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
-    bgGrad.addColorStop(0, '#020617');
-    bgGrad.addColorStop(0.55, '#0f172a');
-    bgGrad.addColorStop(1, '#1e3a8a');
-    ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, W, H);
-    drawReelsCity(ctx, W, H, '#020617');
-    drawVignette(ctx, W, H);
-    // 頂部微光
-    const glow = ctx.createRadialGradient(W * 0.5, H * 0.18, base * 0.05, W * 0.5, H * 0.18, base * 0.9);
-    glow.addColorStop(0, hexToRgba(tpl.accent || '#ffd84d', 0.12));
-    glow.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+    const accent = tpl.accent || '#f5d782';
+    drawReelsLuxBg(ctx, W, H, accent);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
-    // 頂部紅色 badge（全港首個 之類）
+    // 頂部 badge（深色底＋金邊＋金字，低調高級）
     const bText = data.badge || (tpl.badge && tpl.badge.text) || '';
     if (bText) {
-      ctx.font = font(800, base * 0.05);
+      ctx.font = font(700, base * 0.045);
       const tw = ctx.measureText(bText).width;
-      const bh = base * 0.10, bw = tw + base * 0.09, bx = W / 2 - bw / 2, by = H * 0.07;
-      ctx.fillStyle = '#e11d48';
-      roundRect(ctx, bx, by, bw, bh, bh * 0.3); ctx.fill();
-      ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const bh = base * 0.085, bw = tw + base * 0.10, bx = W / 2 - bw / 2, by = H * 0.06;
+      ctx.fillStyle = 'rgba(5,9,18,0.85)';
+      roundRect(ctx, bx, by, bw, bh, bh * 0.5); ctx.fill();
+      ctx.lineWidth = Math.max(2, W * 0.0022); ctx.strokeStyle = accent;
+      roundRect(ctx, bx, by, bw, bh, bh * 0.5); ctx.stroke();
+      ctx.fillStyle = accent; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(bText, W / 2, by + bh / 2);
     }
 
-    // 真人頭像圓框
-    drawReelsAvatar(ctx, W / 2, H * 0.29, base * 0.23, tpl, font);
+    // 真人頭像圓框（金邊）
+    drawReelsAvatar(ctx, W / 2, H * 0.28, base * 0.22, tpl, font);
 
-    // 下半：大字標題（限定最多 3 行，每行最多 9 字，唔會截字）
-    const tSize = Math.round(base * 0.10);
-    const lineHeight = tSize * 1.25;
+    // 大字標題（白金，每行 ≤9 字，唔截字）
+    const tSize = Math.round(base * 0.095);
+    const lineHeight = tSize * 1.22;
     const lines = breakReelsTitle(data.title, 9).slice(0, 3);
     const totalH = lines.length * lineHeight;
-    const titleCenterY = H * 0.54;
+    const titleCenterY = H * 0.52;
     let firstY = titleCenterY - totalH / 2 + lineHeight / 2;
     ctx.font = font(900, tSize);
-    ctx.textBaseline = 'middle';
     lines.forEach((ln, i) => {
       const y = firstY + i * lineHeight;
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      ctx.fillText(ln, W / 2 + tSize * 0.03, y + tSize * 0.03);
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.fillText(ln, W / 2 + tSize * 0.025, y + tSize * 0.025);
       ctx.fillStyle = tpl.titleColor || '#ffffff';
       ctx.fillText(ln, W / 2, y);
     });
 
-    // 副標題（金／accent 色）
+    // 標題下金色短線
+    const ruleY = titleCenterY + totalH / 2 + base * 0.025;
+    ctx.strokeStyle = accent; ctx.lineWidth = Math.max(2, W * 0.0024);
+    ctx.beginPath(); ctx.moveTo(W / 2 - base * 0.10, ruleY); ctx.lineTo(W / 2 + base * 0.10, ruleY); ctx.stroke();
+
+    // 副標題（金字，機構身份）
     if (data.tagline) {
-      const sSize = Math.round(base * 0.045);
-      const sLh = sSize * 1.35;
-      ctx.font = font(700, sSize);
-      ctx.fillStyle = tpl.subColor || tpl.accent || '#ffd84d';
-      const sl = breakReelsTitle(data.tagline, 13).slice(0, 2);
-      let subY = titleCenterY + totalH / 2 + base * 0.03;
-      sl.forEach((ln, i) => ctx.fillText(ln, W / 2, subY + i * sLh));
+      const sSize = Math.round(base * 0.044);
+      ctx.font = font(600, sSize);
+      ctx.fillStyle = accent;
+      const sl = breakReelsTitle(data.tagline, 20).slice(0, 2);
+      let subY = ruleY + base * 0.04;
+      sl.forEach((ln, i) => ctx.fillText(ln, W / 2, subY + i * sSize * 1.3));
     }
 
     // 平台 logo 列
-    drawReelsPlatforms(ctx, W / 2, H * 0.83, base, data.platform, font);
+    drawReelsPlatforms(ctx, W / 2, H * 0.82, base, data.platform, font);
 
     // 底部 CTA
-    ctx.font = font(600, base * 0.04);
+    ctx.font = font(600, base * 0.042);
     ctx.fillStyle = (tpl.footer && tpl.footer.color) ? tpl.footer.color : '#cbd5e1';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(data.cta || '👇 留言／關注 睇多啲', W / 2, H * 0.93);
+    ctx.fillText(data.cta || '預約一對一保障分析', W / 2, H * 0.92);
     ctx.textAlign = 'left';
   }
 
@@ -3823,6 +3843,6 @@
     renderMarketFocus, drawFlag, drawIcon, drawVictoriaHarbour, drawVignette,
     // 🎬 短視頻工作台測試 hook
     buildVideoScript, pickHook, buildContentCalendar, renderReelsLayout, VIDEO_HOOKS, WEEK_PLAN,
-    chooseReelsTitle, pickReelsBadge, breakReelsTitle, drawReelsCity
+    chooseReelsTitle, pickReelsBadge, breakReelsTitle, drawReelsLuxBg
   };
 })();

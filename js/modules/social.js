@@ -3311,8 +3311,8 @@
 
   // —— 9:16 短視頻封面（真人相 + 大字鉤子 + 平台 logo）——
   function generateReelsCover() {
-    const topic = (document.getElementById('socialTopic') ? document.getElementById('socialTopic').value : '').trim();
-    if (!topic) { alert('請先填「主題」，再出短視頻封面。'); return; }
+    let topic = (document.getElementById('socialTopic') ? document.getElementById('socialTopic').value : '').trim();
+    if (!topic) topic = '保險'; // 避免空主題時無反應，直接用預設主題
     const style = document.getElementById('socialStyle') ? document.getElementById('socialStyle').value : 'casual';
     const persona = personaProfile.enabled ? personaProfile.tone : (document.getElementById('socialPersona') ? document.getElementById('socialPersona').value : 'friendly');
     const hookStyle = document.getElementById('videoHookStyle') ? document.getElementById('videoHookStyle').value : '';
@@ -3329,10 +3329,12 @@
     };
     const dims = ratioToDims('9:16');
     const out = document.getElementById('socialOutput');
+    if (!out) { alert('輸出區未準備好'); return; }
     out.className = 'output-box filled';
     out.innerHTML = `<div class="proposal-section" style="border-color:#e11d48">
       <h4>🎬 短視頻封面（9:16 · 小紅書／抖音）</h4>
       <div class="cover-wrap"><canvas id="reelsCanvas" class="social-canvas"></canvas></div>
+      <div id="reelsError" style="color:#e11d48;font-size:13px;margin-top:6px"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
         <button class="btn btn-sm btn-primary" onclick="SocialModule.downloadMultiCover('reelsCanvas','reels_cover')">⬇️ 圖</button>
         <button class="btn btn-sm btn-secondary" onclick="SocialModule.openMultiInCanva('reels')">🎨 Canva</button>
@@ -3340,8 +3342,16 @@
       <p class="cover-tip">冇上傳頭像會用佔位圈；喺上面「頭像設定」upload 你嘅真人相，封面就會放你個樣（似片中真人風）。</p>
     </div>`;
     const cv = document.getElementById('reelsCanvas');
+    const errBox = document.getElementById('reelsError');
     cv.width = dims.w * CANVAS_HD; cv.height = dims.h * CANVAS_HD;
-    try { renderCover(cv, tpl, data); } catch (e) { console.warn(e); }
+    try {
+      renderCover(cv, tpl, data);
+      if (errBox) errBox.textContent = '';
+    } catch (e) {
+      console.error(e);
+      if (errBox) errBox.textContent = '封面渲染出錯：' + e.message;
+      alert('出 9:16 封面時發生錯誤：' + e.message);
+    }
     try {
       Storage.addHistory({ type: 'social', topic, platform: 'video', ratio: '9:16', templateId: tpl.id, templateName: tpl.name, title: data.title });
       if (typeof updateDashboardStats === 'function') updateDashboardStats();

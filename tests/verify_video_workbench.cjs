@@ -47,6 +47,13 @@ ok(typeof window.SocialModule.generateReelsCover === 'function', 'SocialModule.g
 ok(typeof window.SocialModule.refreshVideoHooks === 'function', 'SocialModule.refreshVideoHooks 存在');
 ok(typeof window.SocialModule.generateContentCalendar === 'function', 'SocialModule.generateContentCalendar 存在');
 ok(typeof T.buildVideoScript === 'function' && typeof T.pickHook === 'function' && typeof T.buildContentCalendar === 'function', '__test 暴露 buildVideoScript / pickHook / buildContentCalendar');
+ok(typeof T.chooseReelsTitle === 'function' && typeof T.pickReelsBadge === 'function' && typeof T.breakReelsTitle === 'function', '__test 暴露 chooseReelsTitle / pickReelsBadge / breakReelsTitle');
+
+// 1b. 封面標題精簡專業、自動斷行不截字
+const rt = T.chooseReelsTitle('小紅書');
+ok(rt.length <= 13 && !/手寫文案|日日出小/.test(rt), 'reels 標題精簡專業：' + rt);
+const broken = T.breakReelsTitle('小紅書保險獲客', 9);
+ok(broken.length <= 2 && broken.every(l => l.length <= 9), '長標題自動斷行唔超過 9 字：' + broken.join('/'));
 
 // 2. Hook 庫（Task #78）：六類，{topic} 會被取代
 const cats = Object.keys(T.VIDEO_HOOKS);

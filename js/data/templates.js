@@ -844,5 +844,12 @@ const COVER_TEMPLATES = [
     bg:{from:'#0a0e27',to:'#1a1f4d',dir:'d'},
     badge:{text:'每日市場焦點',bg:'#d4af37',color:'#1a1f4d'},
     titleColor:'#f5d782', titleWeight:900, subColor:'#cbd5e1', bulletColor:'#f8fafc',
-    footer:{text:'Jackson Hui',color:'#d4af37'}, decor:'none', accent:'#d4af37' }
+    footer:{text:'Jackson Hui',color:'#d4af37'}, decor:'none', accent:'#d4af37' },
+
+  // —— 短視頻封面（9:16 · 真人相 + 大字鉤子 + 平台 logo，對標口播 Reels）——
+  { id:'reels-cover', name:'短視頻封面·9:16', cat:'大字報', layout:'reels', lux:true, avatar:true,
+    bg:{from:'#0b1220',to:'#1e3a8a',dir:'d'},
+    badge:{text:'全港首個',bg:'#e11d48',color:'#ffffff'},
+    titleColor:'#ffffff', titleWeight:900, subColor:'#ffd84d', bulletColor:'#f1f5f9',
+    footer:{text:'Jackson Hui',color:'#cbd5e1'}, decor:'none', accent:'#ffd84d' }
 ];

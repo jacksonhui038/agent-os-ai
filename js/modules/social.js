@@ -84,6 +84,9 @@
     renderViralPanel();
     renderCompliancePanel();
     renderBatchPanel();
+    // 🎬 小紅書短視頻工作台：腳本 / 9:16 封面 / 一週日曆
+    renderVideoPanel();
+    renderCalendarPanel();
   }
 
   // 升級兼容：將舊 localStorage 個 key 喺雲端就緒時自動遷移去 user_settings（換裝置都有）
@@ -430,6 +433,7 @@
     else if (tpl.layout === 'cute') renderCuteLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
     else if (tpl.layout === 'photo') renderPhotoLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
     else if (tpl.layout === 'market_focus') renderMarketFocus(ctx, tpl, data, W, H, pad, base, titleSize, font);
+    else if (tpl.layout === 'reels') renderReelsLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
     else renderDefaultLayout(ctx, tpl, data, W, H, pad, base, titleSize, font);
 
     // 系列 EP 徽章（所有風格通用，右上角）
@@ -1769,7 +1773,7 @@
   };
 
   function openMultiInCanva(key) {
-    const dims = { ig: { w: 1080, h: 1080 }, xhs: { w: 1080, h: 1440 }, fb: { w: 1200, h: 630 } }[key] || { w: 1080, h: 1080 };
+    const dims = { ig: { w: 1080, h: 1080 }, xhs: { w: 1080, h: 1440 }, fb: { w: 1200, h: 630 }, reels: { w: 1080, h: 1920 } }[key] || { w: 1080, h: 1080 };
     const cv = document.getElementById('mpCanvas_' + key);
     if (cv) { const a = document.createElement('a'); a.download = 'SET_cover.png'; a.href = cv.toDataURL('image/png'); a.click(); }
     window.open(`https://www.canva.com/design?create&width=${dims.w}&height=${dims.h}`, '_blank');
@@ -3062,6 +3066,426 @@
     appendExtraPlatforms(topic);
   }
 
+  // ======================================================================
+  // 🎬 小紅書短視頻工作台：Hook 庫 + 短視頻腳本 + 一週內容日曆 + 9:16 封面
+  // 對標真人口播 Reels（片中：大字幕鉤子 + 分鏡 + 平台 logo + 後台 demo）
+  // ======================================================================
+
+  // —— 強化文案 Hook 庫（六類鉤子，{topic} 會被主題取代）——
+  const VIDEO_HOOKS = {
+    痛點: [
+      '做保險最難嘅，從來唔係成交，係邊度搵到肯聽你講嘅客',
+      '每日對住冷冰冰嘅名單 cold call，你都攰㗎啦？',
+      '{topic}講到口都乾，客戶都當耳邊風？問題可能出喺你講嘅方式',
+      '同一個 post 出咗又出，likes 得個位數，係咪好泄氣？',
+      '想開拓內地客，但唔知點喺小紅書、抖音開始？'
+    ],
+    好奇: [
+      '原來{topic}，九成人第一步就已經做錯咗',
+      '一個方法，令我唔使再周圍派卡片，都有客主動搵上門',
+      '我試咗全港第一個用小紅書＋抖音獲客嘅保險做法，結果……',
+      '講一個好少同行肯講嘅{topic}真相',
+      '點解有啲 agent 帳號可以日日出貼，仲篇篇有人睇？'
+    ],
+    數字: [
+      '3 個位，睇完你就明點解你嘅{topic} post 冇人睇',
+      '18 種保險專屬工具，一次過幫你由搵客做到成交',
+      '每日 5 分鐘，一星期出足 7 篇小紅書，唔使再諗 caption',
+      '關於{topic}，記住呢 3 樣就夠',
+      '由 0 粉開始，30 日做起一個保險帳號，我點做？'
+    ],
+    反差: [
+      '以前寫一個 post 諗成個鐘，家陣一撳，7 篇連圖一次出',
+      '同行仲喺度手寫文案，我已經用 AI 日日出小紅書＋抖音',
+      '唔使識設計、唔使識剪片，一樣做到似樣嘅{topic}內容',
+      '以前追住客戶問，家陣係客戶留言問我{topic}'
+    ],
+    權威: [
+      '全港首個中國社媒保險獲客 AI，我親自試俾你睇',
+      '幫過成隊 agent 由零開始做起小紅書，方法就係咁',
+      '做咗保險咁多年，如果我今日重新開始，{topic}我會咁做',
+      '呢套{topic}打法，係我實測有客搵上門先敢分享'
+    ],
+    誘因: [
+      '留言「AI」，送你一套小紅書保險獲客模板',
+      '想要呢套{topic}內容日曆？評論區扣「1」我發你',
+      '收藏呢條片跟住做，一星期見到帳號有變化',
+      '關注我，跟埋落嚟，教你由零做起保險自媒體'
+    ]
+  };
+  const HOOK_CATS = Object.keys(VIDEO_HOOKS);
+
+  function vsShorten(s, n) {
+    s = (s || '').replace(/[。！？，、\s]+$/g, '');
+    return s.length > n ? s.slice(0, n) : s;
+  }
+  function vsRange(a, b) { return a + 's–' + b + 's'; }
+
+  // 揀鉤子：指定類別就用該類，否則全庫隨機
+  function pickHook(topic, hookStyle) {
+    const cats = (hookStyle && VIDEO_HOOKS[hookStyle]) ? [hookStyle] : HOOK_CATS;
+    const cat = cats[Math.floor(Math.random() * cats.length)];
+    const arr = VIDEO_HOOKS[cat];
+    const raw = arr[Math.floor(Math.random() * arr.length)];
+    return { cat, text: raw.replace(/\{topic\}/g, topic || '保險') };
+  }
+
+  const SCRIPT_DURATIONS = {
+    '15': { label: '15 秒（極速）', pts: 2, hook: 2, cta: 3 },
+    '30': { label: '30 秒（標準）', pts: 3, hook: 3, cta: 4 },
+    '60': { label: '60 秒（深度）', pts: 5, hook: 3, cta: 5 }
+  };
+  const VIDEO_TIPS = [
+    '頭 3 秒定生死：大字幕＋鉤子即刻拋出，唔好慢慢鋪陳',
+    '直度 9:16 拍，人物置中偏上，下方留位俾字幕',
+    '每句口播配一句大字幕，字要夠大（約佔畫面 1/5）',
+    '穿插後台／工具截圖，增加可信度（似片中 demo）',
+    '結尾一定要有明確動作：留言關鍵詞／關注／收藏',
+    '收音清晰過畫質；講嘢自然啲，唔好逐字讀稿'
+  ];
+
+  // 核心：由主題砌一段短視頻腳本（口播＋大字幕＋分鏡＋caption）
+  function buildVideoScript(topic, opts) {
+    opts = opts || {};
+    const style = opts.style || 'casual';
+    const persona = opts.persona || 'friendly';
+    const durKey = SCRIPT_DURATIONS[opts.duration] ? opts.duration : '30';
+    const dur = SCRIPT_DURATIONS[durKey];
+    const total = parseInt(durKey, 10);
+    const rich = getRichContent(topic, style, persona, 'xhs', new Set());
+    const hook = pickHook(topic, opts.hookStyle || '');
+    const entries = (rich.entries || []).slice(0, dur.pts);
+    const bodyTotal = Math.max(3, total - dur.hook - dur.cta);
+    const per = Math.max(3, Math.round(bodyTotal / Math.max(1, entries.length)));
+
+    const segments = [];
+    segments.push({
+      time: vsRange(0, dur.hook), role: '開場鉤子',
+      subtitle: vsShorten(hook.text, 14), narration: hook.text,
+      visual: '真人出鏡對住鏡頭講，表情要有戲；大字幕彈出'
+    });
+    let t = dur.hook;
+    entries.forEach((e, i) => {
+      const last = i === entries.length - 1;
+      const end = last ? (total - dur.cta) : Math.min(total - dur.cta, t + per);
+      segments.push({
+        time: vsRange(t, end), role: '重點 ' + (i + 1),
+        subtitle: vsShorten(e.t, 12),
+        narration: e.t + (e.d ? '，' + e.d : ''),
+        visual: (i % 2) ? '切後台／工具截圖 或 手寫重點特寫' : '真人口播 + 大字幕逐點彈出'
+      });
+      t = end;
+    });
+    const cta = rich.cta || (personaProfile.enabled && personaProfile.cta) || '有興趣留言我發你詳情';
+    segments.push({
+      time: vsRange(total - dur.cta, total), role: '結尾 CTA',
+      subtitle: '留言 👉 即刻拎', narration: cta + '，記得 follow 睇多啲乾貨',
+      visual: '真人 + 指向評論區手勢；出「關注／收藏」引導'
+    });
+
+    return {
+      title: vsShorten(hook.text, 16),
+      hookCat: hook.cat, hookText: hook.text,
+      duration: durKey, segments,
+      caption: buildVideoCaption(topic, hook.text, entries, cta),
+      hashtags: suggestTags(topic, 'xhs') + ' #保險科普 #小紅書乾貨',
+      tips: VIDEO_TIPS
+    };
+  }
+
+  function buildVideoCaption(topic, hook, entries, cta) {
+    let body = hook + '\n\n';
+    (entries || []).forEach((e, i) => { body += (i + 1) + '️⃣ ' + e.t + (e.d ? '｜' + e.d : '') + '\n'; });
+    body += '\n' + cta;
+    const sig = personaSignature();
+    if (sig) body += '\n\n' + sig;
+    return body;
+  }
+
+  function renderVideoPanel() {
+    const box = document.getElementById('videoPanel');
+    if (!box) return;
+    const durOpts = Object.keys(SCRIPT_DURATIONS).map(k => `<option value="${k}" ${k === '30' ? 'selected' : ''}>${SCRIPT_DURATIONS[k].label}</option>`).join('');
+    const hookOpts = ['<option value="">🎲 隨機混合</option>'].concat(HOOK_CATS.map(c => `<option value="${c}">${c}式</option>`)).join('');
+    box.innerHTML = `
+      <label class="form-label">🎬 短視頻腳本生成器（真人口播 Reels：鉤子＋分鏡＋大字幕）</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <select id="videoDuration" class="form-input" style="width:auto;min-width:130px">${durOpts}</select>
+        <select id="videoHookStyle" class="form-input" style="width:auto;min-width:130px">${hookOpts}</select>
+        <button class="btn btn-sm btn-primary" onclick="SocialModule.generateVideoScript()">🎬 生成短視頻腳本</button>
+        <button class="btn btn-sm btn-secondary" onclick="SocialModule.generateReelsCover()">🖼️ 出 9:16 封面</button>
+        <button class="btn btn-sm btn-ghost" onclick="SocialModule.refreshVideoHooks()">🎲 換一批 Hook</button>
+      </div>
+      <div id="hookPreview"></div>
+      <div id="videoOut"></div>
+      <p class="cover-tip">用返上面「主題」欄。腳本會分好時間軸、口播同大字幕，仲有拍攝貼士。9:16 封面配合有頭像時會放你真人相（喺頭像設定 upload）。</p>
+    `;
+    refreshVideoHooks();
+  }
+
+  // Hook 預覽：一次過畀幾條唔同類別鉤子，撳「換一批」再刷新
+  function refreshVideoHooks() {
+    const mount = document.getElementById('hookPreview');
+    if (!mount) return;
+    const topic = (document.getElementById('socialTopic') ? document.getElementById('socialTopic').value : '').trim() || '保險';
+    const picks = HOOK_CATS.map(cat => {
+      const arr = VIDEO_HOOKS[cat];
+      return { cat, text: arr[Math.floor(Math.random() * arr.length)].replace(/\{topic\}/g, topic) };
+    });
+    let html = '<div class="proposal-section" style="border-color:#e11d48;margin-top:6px"><h4>🪝 Hook 靈感（撳「換一批」刷新）</h4>';
+    picks.forEach((p, i) => {
+      html += `<div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px">
+        <span class="tag" style="background:#e11d48;color:#fff;flex-shrink:0">${p.cat}</span>
+        <span id="hookLine_${i}" style="flex:1">${escapeHtml(p.text)}</span>
+        <button class="btn btn-sm btn-ghost" style="flex-shrink:0" onclick="copySingleText('hookLine_${i}', this)">複製</button>
+      </div>`;
+    });
+    html += '</div>';
+    mount.innerHTML = html;
+  }
+
+  function generateVideoScript() {
+    const topic = (document.getElementById('socialTopic') ? document.getElementById('socialTopic').value : '').trim();
+    if (!topic) { alert('請先喺上面填「主題」，再生成短視頻腳本。'); return { ok: false }; }
+    const style = document.getElementById('socialStyle') ? document.getElementById('socialStyle').value : 'casual';
+    const persona = personaProfile.enabled ? personaProfile.tone : (document.getElementById('socialPersona') ? document.getElementById('socialPersona').value : 'friendly');
+    const duration = document.getElementById('videoDuration') ? document.getElementById('videoDuration').value : '30';
+    const hookStyle = document.getElementById('videoHookStyle') ? document.getElementById('videoHookStyle').value : '';
+    const s = buildVideoScript(topic, { style, persona, duration, hookStyle });
+    const out = document.getElementById('videoOut');
+    if (!out) return { ok: false };
+    let rows = s.segments.map(seg => `
+      <tr>
+        <td style="white-space:nowrap;color:#e11d48;font-weight:700">${seg.time}</td>
+        <td style="white-space:nowrap;color:var(--muted)">${escapeHtml(seg.role)}</td>
+        <td><b>${escapeHtml(seg.subtitle)}</b><br><span style="color:var(--muted);font-size:12px">🎙️ ${escapeHtml(seg.narration)}</span><br><span style="color:#0ea5e9;font-size:12px">🎬 ${escapeHtml(seg.visual)}</span></td>
+      </tr>`).join('');
+    const scriptText = s.segments.map(seg => `[${seg.time}] ${seg.role}\n大字幕：${seg.subtitle}\n口播：${seg.narration}\n畫面：${seg.visual}`).join('\n\n');
+    out.innerHTML = `
+      <div class="proposal-section" style="border-color:#e11d48;margin-top:10px">
+        <h4>🎬 ${escapeHtml(s.duration)} 秒短視頻腳本 · ${escapeHtml(s.hookCat)}式鉤子</h4>
+        <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="text-align:left;border-bottom:2px solid var(--border)"><th>時間</th><th>段落</th><th>內容（大字幕／口播／畫面）</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+        <pre id="videoScriptRaw" style="display:none">${escapeHtml(scriptText)}</pre>
+        <button class="btn btn-sm btn-ghost copy-btn" style="margin-top:8px" onclick="copySingleText('videoScriptRaw', this)">複製腳本</button>
+      </div>
+      <div class="proposal-section" style="border-color:#6366f1">
+        <h4>✍️ 配套小紅書文案</h4>
+        <pre class="output-content" id="videoCap">${escapeHtml(s.caption)}\n\n${escapeHtml(s.hashtags)}</pre>
+        <button class="btn btn-sm btn-ghost copy-btn" onclick="copySingleText('videoCap', this)">複製文案</button>
+      </div>
+      <div class="proposal-section" style="border-color:#10b981">
+        <h4>🎥 拍攝貼士</h4>
+        <ul style="margin:0;padding-left:18px">${s.tips.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ul>
+      </div>`;
+    try {
+      Storage.addHistory({ type: 'social', topic, platform: 'video', ratio: '9:16', templateId: 'video-script', templateName: '短視頻腳本', title: s.title, caption: s.caption });
+      if (typeof updateDashboardStats === 'function') updateDashboardStats();
+    } catch (e) {}
+    return { ok: true };
+  }
+
+  // —— 9:16 短視頻封面（真人相 + 大字鉤子 + 平台 logo）——
+  function generateReelsCover() {
+    const topic = (document.getElementById('socialTopic') ? document.getElementById('socialTopic').value : '').trim();
+    if (!topic) { alert('請先填「主題」，再出短視頻封面。'); return; }
+    const style = document.getElementById('socialStyle') ? document.getElementById('socialStyle').value : 'casual';
+    const persona = personaProfile.enabled ? personaProfile.tone : (document.getElementById('socialPersona') ? document.getElementById('socialPersona').value : 'friendly');
+    const hookStyle = document.getElementById('videoHookStyle') ? document.getElementById('videoHookStyle').value : '';
+    const rich = getRichContent(topic, style, persona, 'xhs', new Set());
+    const hook = pickHook(topic, hookStyle);
+    const tpl = (typeof COVER_TEMPLATES !== 'undefined' ? COVER_TEMPLATES : []).find(t => t.id === 'reels-cover');
+    if (!tpl) { alert('搵唔到短視頻封面範本'); return; }
+    const data = {
+      title: vsShorten(hook.text, 22),
+      tagline: (rich.entries && rich.entries[0]) ? rich.entries[0].t : topic,
+      badge: hook.cat === '權威' ? '全港首個' : '保險乾貨',
+      platform: ['小红书', '抖音'],
+      cta: '👇 留言／關注 睇多啲'
+    };
+    const dims = ratioToDims('9:16');
+    const out = document.getElementById('socialOutput');
+    out.className = 'output-box filled';
+    out.innerHTML = `<div class="proposal-section" style="border-color:#e11d48">
+      <h4>🎬 短視頻封面（9:16 · 小紅書／抖音）</h4>
+      <div class="cover-wrap"><canvas id="reelsCanvas" class="social-canvas"></canvas></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn btn-sm btn-primary" onclick="SocialModule.downloadMultiCover('reelsCanvas','reels_cover')">⬇️ 圖</button>
+        <button class="btn btn-sm btn-secondary" onclick="SocialModule.openMultiInCanva('reels')">🎨 Canva</button>
+      </div>
+      <p class="cover-tip">冇上傳頭像會用佔位圈；喺上面「頭像設定」upload 你嘅真人相，封面就會放你個樣（似片中真人風）。</p>
+    </div>`;
+    const cv = document.getElementById('reelsCanvas');
+    cv.width = dims.w * CANVAS_HD; cv.height = dims.h * CANVAS_HD;
+    try { renderCover(cv, tpl, data); } catch (e) { console.warn(e); }
+    try {
+      Storage.addHistory({ type: 'social', topic, platform: 'video', ratio: '9:16', templateId: tpl.id, templateName: tpl.name, title: data.title });
+      if (typeof updateDashboardStats === 'function') updateDashboardStats();
+    } catch (e) {}
+  }
+
+  function drawReelsAvatar(ctx, cx, cy, r, tpl, font) {
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r + r * 0.07, 0, Math.PI * 2);
+    ctx.fillStyle = tpl.accent || '#ffd84d'; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.closePath(); ctx.clip();
+    if (avatarImage && avatarImage.width) {
+      const scale = Math.max((r * 2) / avatarImage.width, (r * 2) / avatarImage.height);
+      const dw = avatarImage.width * scale, dh = avatarImage.height * scale;
+      ctx.drawImage(avatarImage, cx - dw / 2, cy - dh / 2, dw, dh);
+    } else {
+      ctx.fillStyle = '#1e293b'; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      ctx.fillStyle = '#94a3b8'; ctx.font = font(700, r * 0.95);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('🧑', cx, cy);
+    }
+    ctx.restore();
+  }
+
+  function drawReelsPlatforms(ctx, cx, y, base, list, font) {
+    const items = (list && list.length) ? list : ['小红书', '抖音'];
+    const colors = { '小红书': '#ff2442', '小紅書': '#ff2442', '抖音': '#111111', 'IG': '#c13584', 'Instagram': '#c13584', 'FB': '#1877f2' };
+    ctx.font = font(800, base * 0.048);
+    const gap = base * 0.035, hpad = base * 0.05, bh = base * 0.095;
+    const widths = items.map(t => ctx.measureText(t).width + hpad * 2);
+    const totalW = widths.reduce((a, b) => a + b, 0) + gap * (items.length - 1);
+    let x = cx - totalW / 2;
+    items.forEach((t, i) => {
+      const bw = widths[i];
+      ctx.fillStyle = colors[t] || '#334155';
+      roundRect(ctx, x, y, bw, bh, bh * 0.3); ctx.fill();
+      ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(t, x + bw / 2, y + bh / 2);
+      x += bw + gap;
+    });
+    ctx.textAlign = 'left';
+  }
+
+  function renderReelsLayout(ctx, tpl, data, W, H, pad, base, titleSize, font) {
+    // 中央光暈
+    const grad = ctx.createRadialGradient(W * 0.5, H * 0.28, base * 0.05, W * 0.5, H * 0.28, base * 0.9);
+    grad.addColorStop(0, hexToRgba(tpl.accent || '#ffd84d', 0.22));
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+    // 頂部紅色 badge（全港首個 之類）
+    const bText = data.badge || (tpl.badge && tpl.badge.text) || '';
+    if (bText) {
+      ctx.font = font(800, base * 0.05);
+      const tw = ctx.measureText(bText).width;
+      const bh = base * 0.10, bw = tw + base * 0.09, bx = W / 2 - bw / 2, by = H * 0.07;
+      ctx.fillStyle = '#e11d48';
+      roundRect(ctx, bx, by, bw, bh, bh * 0.3); ctx.fill();
+      ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(bText, W / 2, by + bh / 2);
+    }
+
+    // 真人頭像圓框
+    drawReelsAvatar(ctx, W / 2, H * 0.29, base * 0.23, tpl, font);
+
+    // 下半：大字標題
+    const tSize = Math.round(base * 0.11);
+    ctx.font = font(900, tSize);
+    ctx.fillStyle = tpl.titleColor || '#ffffff';
+    const lines = wrapText(ctx, data.title || '', font(900, tSize), W - pad * 1.3, 3);
+    let ty = H * 0.55;
+    lines.forEach((ln, i) => ctx.fillText(ln, W / 2, ty + i * tSize * 1.12));
+    ty += lines.length * tSize * 1.12;
+
+    // 副標題（金／accent 色）
+    if (data.tagline) {
+      const sSize = Math.round(base * 0.05);
+      ctx.font = font(700, sSize);
+      ctx.fillStyle = tpl.subColor || tpl.accent || '#ffd84d';
+      const sl = wrapText(ctx, data.tagline, font(700, sSize), W - pad * 1.5, 2);
+      sl.forEach((ln, i) => ctx.fillText(ln, W / 2, ty + base * 0.035 + i * sSize * 1.2));
+      ty += sl.length * sSize * 1.2 + base * 0.035;
+    }
+
+    // 平台 logo 列
+    drawReelsPlatforms(ctx, W / 2, H * 0.83, base, data.platform, font);
+
+    // 底部 CTA
+    ctx.font = font(600, base * 0.04);
+    ctx.fillStyle = (tpl.footer && tpl.footer.color) ? tpl.footer.color : '#cbd5e1';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(data.cta || '👇 留言／關注 睇多啲', W / 2, H * 0.93);
+    ctx.textAlign = 'left';
+  }
+
+  // —— 一週小紅書內容日曆（图文＋短視頻 混合排程）——
+  const WEEK_PLAN = [
+    { day: '週一', format: '图文', slot: '12:30', note: '知識乾貨開週，建立專業感' },
+    { day: '週二', format: '短視頻', slot: '19:30', note: '真人口播，拉近距離' },
+    { day: '週三', format: '图文', slot: '12:30', note: '案例／對比，增可信度' },
+    { day: '週四', format: '短視頻', slot: '20:00', note: '痛點鉤子 + 工具展示' },
+    { day: '週五', format: '图文', slot: '19:00', note: '週末前輕鬆清單／避坑' },
+    { day: '週六', format: '短視頻', slot: '11:00', note: '生活化／幕後，增親和' },
+    { day: '週日', format: '互動', slot: '20:30', note: '提問／投票／答疑，谷互動' }
+  ];
+
+  function buildContentCalendar(seed) {
+    const topics = expandTopicsFromSeed(seed, 7);
+    return WEEK_PLAN.map((p, i) => {
+      const topic = topics[i] || seed;
+      const hook = pickHook(topic, p.format === '短視頻' ? '好奇' : (p.format === '互動' ? '誘因' : '')).text;
+      const tag = suggestTags(topic, 'xhs').split(' ').slice(0, 4).join(' ');
+      return Object.assign({}, p, { topic, hook, tag });
+    });
+  }
+
+  function renderCalendarPanel() {
+    const box = document.getElementById('calendarPanel');
+    if (!box) return;
+    box.innerHTML = `
+      <label class="form-label">🗓️ 一週小紅書內容日曆（图文＋短視頻 混合，附最佳發佈時間）</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <input type="text" id="calendarSeed" class="form-input" style="flex:1;min-width:160px" placeholder="填一個大方向，例：家庭醫療保障（留空用上面主題）">
+        <button class="btn btn-sm btn-primary" onclick="SocialModule.generateContentCalendar()">🗓️ 排一週內容</button>
+      </div>
+      <div id="calendarOut"></div>
+      <p class="cover-tip">自動由一個大方向衍生 7 個唔重複角度，排好星期／形式／鉤子／標籤／最佳時間。可一鍵複製成計劃表。</p>
+    `;
+  }
+
+  function generateContentCalendar() {
+    const seedEl = document.getElementById('calendarSeed');
+    let seed = (seedEl ? seedEl.value : '').trim();
+    if (!seed) seed = (document.getElementById('socialTopic') ? document.getElementById('socialTopic').value : '').trim();
+    if (!seed) { alert('請喺「一週內容日曆」欄或上面「主題」填一個大方向。'); return { ok: false }; }
+    const plan = buildContentCalendar(seed);
+    const fmtColor = f => f === '短視頻' ? '#e11d48' : (f === '互動' ? '#8b5cf6' : '#0ea5e9');
+    const rows = plan.map(d => `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="white-space:nowrap;font-weight:700">${d.day}</td>
+        <td style="white-space:nowrap"><span class="tag" style="background:${fmtColor(d.format)};color:#fff">${d.format}</span></td>
+        <td style="white-space:nowrap;color:#e11d48;font-weight:700">${d.slot}</td>
+        <td><b>${escapeHtml(d.topic)}</b><br><span style="color:var(--muted);font-size:12px">🪝 ${escapeHtml(d.hook)}</span><br><span style="color:#0ea5e9;font-size:12px">${escapeHtml(d.tag)}</span><br><span style="color:var(--muted);font-size:11px">💡 ${escapeHtml(d.note)}</span></td>
+      </tr>`).join('');
+    const raw = plan.map(d => `${d.day} ${d.slot}｜${d.format}\n主題：${d.topic}\n鉤子：${d.hook}\n標籤：${d.tag}\n建議：${d.note}`).join('\n\n');
+    const out = document.getElementById('calendarOut');
+    if (out) {
+      out.innerHTML = `
+        <div class="dup-warn" style="background:#eef2ff;border-color:#6366f1;color:#3730a3;margin-top:8px">🗓️ 已排好一週 7 篇（4 图文 / 短視頻 + 1 互動），時間跟你嘅發佈習慣（午飯 12–13 時、晚上 19–21 時）。</div>
+        <div class="proposal-section" style="border-color:#6366f1">
+          <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="text-align:left;border-bottom:2px solid var(--border)"><th>日</th><th>形式</th><th>時間</th><th>主題／鉤子／標籤</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table></div>
+          <pre id="calendarRaw" style="display:none">${escapeHtml(raw)}</pre>
+          <button class="btn btn-sm btn-ghost copy-btn" style="margin-top:8px" onclick="copySingleText('calendarRaw', this)">複製整週計劃</button>
+        </div>`;
+    }
+    try {
+      Storage.addHistory({ type: 'social', topic: seed, platform: 'calendar', ratio: '3:4', templateId: 'week-calendar', templateName: '一週內容日曆', title: seed + ' 一週計劃' });
+      if (typeof updateDashboardStats === 'function') updateDashboardStats();
+    } catch (e) {}
+    return { ok: true, count: plan.length };
+  }
+
   // ===== 每日市場焦點：面板 + 生成 =====
   function todayCN() {
     const d = new Date();
@@ -3250,7 +3674,9 @@
     analyzeViral, rewriteViral, generateWeekBatch, copyAllBatch,
     appendExtraPlatforms, generateExtraPlatforms,
     // 每日市場焦點（金融快訊圖）
-    generateMarketFocus, toggleMarketFocusPanel, renderMarketFocusPanel, fetchTodayNews
+    generateMarketFocus, toggleMarketFocusPanel, renderMarketFocusPanel, fetchTodayNews,
+    // 🎬 小紅書短視頻工作台
+    generateVideoScript, generateReelsCover, refreshVideoHooks, generateContentCalendar
   };
   // 測試用內部 hook（唔影響一般用戶）
   window.SocialModule.__test = {
@@ -3271,6 +3697,8 @@
     detectDomain,
     COMPLIANCE_RULES,
     EXTRA_PLATFORMS,
-    renderMarketFocus, drawFlag, drawIcon, drawVictoriaHarbour, drawVignette
+    renderMarketFocus, drawFlag, drawIcon, drawVictoriaHarbour, drawVignette,
+    // 🎬 短視頻工作台測試 hook
+    buildVideoScript, pickHook, buildContentCalendar, renderReelsLayout, VIDEO_HOOKS, WEEK_PLAN
   };
 })();

@@ -43,8 +43,13 @@
     let k = '';
     try { k = Storage.getSetting('redfoxKey') || ''; } catch {}
     if (k) return k;
-    // 2) 舊 localStorage 兼容（升級前用過嘅）
+    // 2) 舊 localStorage 兼容（升級前／被雲端覆蓋後搶救）
     try { k = localStorage.getItem('agent_os_redfox_key') || ''; } catch {}
+    if (k) {
+      // 自動寫返入 user_settings，避免下次又被雲端空值覆蓋而遺失
+      try { Storage.setSetting('redfoxKey', k); } catch {}
+      if (typeof CloudSync !== 'undefined') CloudSync.pushSetting('redfoxKey', k);
+    }
     return k;
   }
   function setRedFoxKey(key) {
@@ -89,13 +94,17 @@
     renderCalendarPanel();
   }
 
-  // 升級兼容：將舊 localStorage 個 key 喺雲端就緒時自動遷移去 user_settings（換裝置都有）
+  // 升級兼容：將舊 localStorage 個 key 自動遷移去 user_settings，避免被雲端空值覆蓋後遺失
   function migrateLegacyKey() {
     try {
       const legacy = localStorage.getItem('agent_os_redfox_key') || '';
+      if (legacy && !Storage.getSetting('redfoxKey')) {
+        try { Storage.setSetting('redfoxKey', legacy); } catch {}
+      }
+      // 雲端就緒時再 push 一次，確保雲端都有備份
       const cloudOk = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.cloudEnabled) && (typeof Auth !== 'undefined' && Auth.isLoggedIn);
-      if (legacy && !Storage.getSetting('redfoxKey') && cloudOk) {
-        setRedFoxKey(legacy);
+      if (legacy && cloudOk) {
+        if (typeof CloudSync !== 'undefined') CloudSync.pushSetting('redfoxKey', legacy);
       }
     } catch {}
   }
@@ -103,20 +112,33 @@
   function renderRedFoxSetting() {
     const box = document.getElementById('redfoxSetting');
     if (!box) return;
+    const k = getRedFoxKey() || '';
+    const masked = k ? (k.slice(0, 6) + '...' + k.slice(-4)) : '未設定';
     box.innerHTML = `
-      <label class="form-label">RedFox API Key（即時搜範本用）</label>
+      <label class="form-label">RedFox API Key（即時搜範本用）<span style="font-weight:400;color:var(--muted)">— 目前：${escapeHtml(masked)}</span></label>
       <div style="display:flex;gap:8px">
-        <input type="password" class="form-input" id="redfoxKeyInput" placeholder="ak_xxxxxxxx" value="${escapeHtml(getRedFoxKey())}" style="flex:1">
+        <input type="password" class="form-input" id="redfoxKeyInput" placeholder="ak_xxxxxxxx" value="${escapeHtml(k)}" style="flex:1">
+        <button type="button" class="btn btn-sm btn-ghost" onclick="SocialModule.toggleRedFoxKeyVisibility()">顯示</button>
         <button class="btn btn-sm btn-secondary" onclick="SocialModule.saveRedFoxKey()">儲存</button>
       </div>
       <p class="cover-tip">如未填寫，「即時搜範本」會用免費 Web 趨勢結果代替。Key 會同步去雲端（你嘅 user 設定），換 phone／換 browser 登入後都會自動載返，唔會冇咗。</p>
     `;
   }
 
+  function toggleRedFoxKeyVisibility() {
+    const el = document.getElementById('redfoxKeyInput');
+    const btn = el && el.nextElementSibling;
+    if (!el) return;
+    const show = el.type === 'password';
+    el.type = show ? 'text' : 'password';
+    if (btn && btn.tagName === 'BUTTON') btn.textContent = show ? '隱藏' : '顯示';
+  }
+
   function saveRedFoxKey() {
     const el = document.getElementById('redfoxKeyInput');
     if (!el) return;
     setRedFoxKey(el.value.trim());
+    renderRedFoxSetting();
     alert('RedFox API Key 已儲存，並同步去雲端（換裝置登入都會有）。');
   }
 
@@ -3666,7 +3688,7 @@
 
   window.generateSocialContent = generate;
   window.SocialModule = {
-    init, rerenderWithSelected, markPublished, saveRedFoxKey, saveImageGenKey, toggleAiBackground,
+    init, rerenderWithSelected, markPublished, saveRedFoxKey, toggleRedFoxKeyVisibility, saveImageGenKey, toggleAiBackground,
     searchTrendTemplates, applyTrend, useAiAvatar, clearAvatar, toggleSeries, openInCanva,
     generateMultiPlatform, generateRealistic, downloadMultiCover, openMultiInCanva, copyAllMulti,
     // A–F 小紅書強化

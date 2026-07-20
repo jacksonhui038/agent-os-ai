@@ -66,7 +66,10 @@ const CloudSync = {
       if (!res.ok) throw new Error('GET user_settings HTTP ' + res.status);
       const rows = await res.json();
       const data = (rows[0] && rows[0].data) ? rows[0].data : {};
-      localStorage.setItem('agent_os_settings', JSON.stringify(data));
+      // 合併而非覆蓋：本地已有但雲端無的 key（尤其 API key）應保留，避免被清空
+      const local = this.getSettings();
+      const merged = Object.assign({}, local, data);
+      localStorage.setItem('agent_os_settings', JSON.stringify(merged));
       return true;
     } catch (e) {
       console.error('CloudSync.pullSettings failed:', e);

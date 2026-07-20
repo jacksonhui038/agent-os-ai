@@ -710,6 +710,70 @@
     g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.55)');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   }
+  // 維港兩岸高樓剪影（fromX→toX，isHK=香港島/九龍，地標最高）
+  function drawHarbourBank(ctx, W, H, horizon, fromX, toX, bldColor, winColor, rnd, isHK) {
+    ctx.fillStyle = bldColor;
+    let x = fromX;
+    const maxBH = H * (isHK ? 0.34 : 0.30);
+    let first = true;
+    while (x < toX) {
+      const bw = W * (0.03 + rnd() * 0.05);
+      let bh = first ? maxBH * (isHK ? 1.0 : 0.92) : H * (0.08 + rnd() * 0.22);
+      first = false;
+      const bx = x, by = horizon - bh;
+      ctx.fillRect(bx, by, bw, bh);
+      // 窗戶燈光
+      ctx.fillStyle = winColor;
+      ctx.globalAlpha = 0.5;
+      for (let wy = by + H * 0.02; wy < horizon - H * 0.01; wy += H * 0.028) {
+        for (let wx = bx + bw * 0.18; wx < bx + bw * 0.82; wx += bw * 0.26) {
+          if (rnd() > 0.55) ctx.fillRect(wx, wy, W * 0.005, H * 0.011);
+        }
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = bldColor;
+      x += bw + W * 0.01;
+    }
+  }
+  // 維港夜景（星空＋月光＋兩岸地標＋海面倒影）
+  function drawVictoriaHarbour(ctx, W, H, accent) {
+    const horizon = H * 0.80;
+    ctx.save();
+    // 星空
+    let s = 20260720;
+    const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+    for (let i = 0; i < 70; i++) {
+      const sx = rnd() * W, sy = rnd() * horizon * 0.7;
+      ctx.globalAlpha = 0.2 + rnd() * 0.55;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(sx, sy, W * 0.0022, W * 0.0022);
+    }
+    ctx.globalAlpha = 1;
+    // 月光（金）
+    ctx.fillStyle = 'rgba(245,215,130,0.85)';
+    ctx.beginPath(); ctx.arc(W * 0.83, H * 0.13, W * 0.04, 0, Math.PI * 2); ctx.fill();
+    // 兩岸高樓：右=香港島、左=九龍
+    const bldColor = 'rgba(8, 12, 32, 0.80)';
+    const winColor = 'rgba(245,215,130,0.55)';
+    drawHarbourBank(ctx, W, H, horizon, W * 0.46, W, bldColor, winColor, rnd, true);
+    drawHarbourBank(ctx, W, H, horizon, 0, W * 0.54, bldColor, winColor, rnd, false);
+    // 海面
+    const sea = ctx.createLinearGradient(0, horizon, 0, H);
+    sea.addColorStop(0, 'rgba(12, 22, 52, 0.5)');
+    sea.addColorStop(1, 'rgba(4, 8, 24, 0.85)');
+    ctx.fillStyle = sea;
+    ctx.fillRect(0, horizon, W, H - horizon);
+    // 海面倒影光線
+    ctx.globalAlpha = 0.12;
+    ctx.fillStyle = accent;
+    for (let i = 0; i < 16; i++) {
+      const rx = rnd() * W;
+      const rh = (H - horizon) * (0.15 + rnd() * 0.75);
+      ctx.fillRect(rx, horizon + H * 0.01, W * 0.004, rh);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
 
   // 系列 EP 徽章（右上角）
   function drawSeriesBadge(ctx, tpl, W, H, pad, titleSize, font) {
@@ -871,6 +935,12 @@
       { flag: 'KR', icon: 'rate', title: '南韓一如預期加息 0.25 厘', subtitle: '指標利率升至 2.75%' },
       { flag: 'HK', icon: 'chart', title: '香港投資管理公司表現亮眼', subtitle: '去年投資收入增 1.75 倍' }
     ];
+
+    // 華麗版：維港夜景背景（兩岸地標＋海面倒影），再疊暗角令文字更突出
+    if (lux) {
+      try { drawVictoriaHarbour(ctx, W, H, gold); } catch (e) {}
+      try { drawVignette(ctx, W, H); } catch (e) {}
+    }
 
     let y = pad;
     // 標題
@@ -3201,6 +3271,6 @@
     detectDomain,
     COMPLIANCE_RULES,
     EXTRA_PLATFORMS,
-    renderMarketFocus, drawFlag, drawIcon
+    renderMarketFocus, drawFlag, drawIcon, drawVictoriaHarbour, drawVignette
   };
 })();

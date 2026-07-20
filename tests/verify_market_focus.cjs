@@ -51,6 +51,8 @@ ok(typeof window.SocialModule.fetchTodayNews === 'function', 'SocialModule.fetch
 ok(typeof window.SocialModule.__test.renderMarketFocus === 'function', '__test.renderMarketFocus 存在');
 ok(typeof window.SocialModule.__test.drawFlag === 'function', '__test.drawFlag 存在');
 ok(typeof window.SocialModule.__test.drawIcon === 'function', '__test.drawIcon 存在');
+ok(typeof window.SocialModule.__test.drawVictoriaHarbour === 'function', '__test.drawVictoriaHarbour 存在');
+ok(typeof window.SocialModule.__test.drawVignette === 'function', '__test.drawVignette 存在');
 
 // 3. renderMarketFocus 簡潔版 / 華麗版 / 冇 items 用 sample，全部唔 throw
 const data = {
@@ -86,6 +88,14 @@ try {
   ['clock', 'rate', 'chart', 'building', 'bulb', 'globe', 'news', ''].forEach(ic => window.SocialModule.__test.drawIcon(fakeCtx(), ic, 0, 0, 40, '#3b82f6'));
 } catch (e) { err = e; }
 ok(!err, 'drawFlag / drawIcon 所有碼跑通，冇 throw' + (err ? (' → ' + err.message) : ''));
+
+// 4b. drawVictoriaHarbour / drawVignette 唔 throw
+err = null;
+try {
+  window.SocialModule.__test.drawVictoriaHarbour(fakeCtx(), 2160, 2700, '#d4af37');
+  window.SocialModule.__test.drawVignette(fakeCtx(), 2160, 2700);
+} catch (e) { err = e; }
+ok(!err, 'drawVictoriaHarbour / drawVignette 唔 throw' + (err ? (' → ' + err.message) : ''));
 
 // 5. generateMarketFocus 全路徑（DOM 填入 → 出 canvas 尺寸）
 window.SocialModule.renderMarketFocusPanel();

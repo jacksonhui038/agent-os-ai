@@ -3268,6 +3268,38 @@
     };
   }
 
+  // 完整剪輯教學 Script：根據已生成嘅腳本，自動產生「剪映逐秒分鏡」教學，
+  // 任何題材 generate 都會跟內容填好（拍攝清單 / 剪映步驟 / 大字幕庫 / 貼士）。
+  function buildEditingScript(topic, s) {
+    const seg = (s && s.segments) || [];
+    const prep = [
+      { name: '真人對嘴片段', src: '你用手機拍（開場 + 結尾 CTA 各 1 段）', note: '企光猛位望鏡頭，每段講 1 句' },
+      { name: '網站屏幕錄製', src: 'Agent OS AI 操作錄屏', note: 'SET 智能體出筆記 · 社交引擎出 3 平台 · RedFox 搜範本' },
+      { name: '封面圖 PNG', src: '「🖼️ 出 9:16 封面」生成', note: '抽 1-2 張靚嘅做展示' },
+      { name: '數據圖表', src: '你嘅小紅書/IG 後台截圖', note: '播光數、點擊率等儀表板感' }
+    ];
+    const steps = [
+      '開剪映 → 新建 9:16 草稿 → 匯入所有素材',
+      '拉開場真人片到軌道（對應分鏡 Shot 1）→ 加「開場大字」貼紙',
+      '加數據截圖（Shot 2）→ 加「痛點字幕」',
+      '加屏幕錄製（Shot 3 起）→ 用「畫中畫」疊你頭像貼紙右下角',
+      '每段之間加轉場（推鏡／放大／淡入，各 0.3s）',
+      '每段加對應大字幕（睇下面「可複製文案庫」）',
+      '全段加同一條 BGM（音量 30%）→ 去「音頻」降噪',
+      '加口播配音（或直接用真人原聲）',
+      '預覽節奏，刪走冗長位',
+      '匯出：1080×1920，60fps，MP4'
+    ];
+    const subtitles = seg.map(x => x.subtitle);
+    const cta = seg.length ? seg[seg.length - 1].subtitle : '👇 link 喺簡介 · 免費試';
+    const tips = (s && s.tips ? s.tips : []).concat([
+      '全片加字幕！小紅書 80% 人關聲睇',
+      '每句口播之間留 0.5s 空位，剪輯好 cut',
+      '光：面對窗戶自然光，唔好背光'
+    ]);
+    return { prep, steps, subtitles, cta, tips };
+  }
+
   function buildVideoCaption(topic, hook, body, cta) {
     let b = hook + '\n\n';
     (body || []).forEach((e, i) => { b += (i + 1) + '️⃣ ' + e.nar + '\n'; });
@@ -3327,6 +3359,7 @@
     const duration = document.getElementById('videoDuration') ? document.getElementById('videoDuration').value : '30';
     const hookStyle = document.getElementById('videoHookStyle') ? document.getElementById('videoHookStyle').value : '';
     const s = buildVideoScript(topic, { style, persona, duration, hookStyle });
+    const edit = buildEditingScript(topic, s);
     const out = document.getElementById('videoOut');
     if (!out) return { ok: false };
     let rows = s.segments.map(seg => `
@@ -3336,6 +3369,18 @@
         <td><b>${escapeHtml(seg.subtitle)}</b><br><span style="color:var(--muted);font-size:12px">🎙️ ${escapeHtml(seg.narration)}</span><br><span style="color:#0ea5e9;font-size:12px">🎬 ${escapeHtml(seg.visual)}</span></td>
       </tr>`).join('');
     const scriptText = s.segments.map(seg => `[${seg.time}] ${seg.role}\n大字幕：${seg.subtitle}\n口播：${seg.narration}\n畫面：${seg.visual}`).join('\n\n');
+    const prepRows = edit.prep.map(p => `<tr><td style="white-space:nowrap"><b>${escapeHtml(p.name)}</b></td><td style="color:var(--muted)">${escapeHtml(p.src)}</td><td style="color:var(--muted);font-size:12px">${escapeHtml(p.note)}</td></tr>`).join('');
+    const stepRows = edit.steps.map((st, i) => `<li>${i + 1}. ${escapeHtml(st)}</li>`).join('');
+    const subRows = edit.subtitles.map(t => `<li>${escapeHtml(t)}</li>`).join('');
+    const editTips = edit.tips.map(t => `<li>${escapeHtml(t)}</li>`).join('');
+    const editText = ['【拍攝準備清單】']
+      .concat(edit.prep.map(p => `- ${p.name}：${p.src}（${p.note}）`))
+      .concat(['', '【剪映操作步驟】'])
+      .concat(edit.steps.map((st, i) => `${i + 1}. ${st}`))
+      .concat(['', '【可複製大字幕】'])
+      .concat(edit.subtitles.map(t => `- ${t}`))
+      .concat(['', 'CTA 字幕：' + edit.cta, '', '【拍攝小貼士】'])
+      .concat(edit.tips.map(t => `- ${t}`)).join('\n');
     out.innerHTML = `
       <div class="proposal-section" style="border-color:#e11d48;margin-top:10px">
         <h4>🎬 ${escapeHtml(s.duration)} 秒短視頻腳本 · ${escapeHtml(s.hookCat)}式鉤子</h4>
@@ -3364,6 +3409,25 @@
         <h4>🤖 點樣出到條片？（真人拍 vs AI 生成）</h4>
         <p style="font-size:13px;margin:6px 0;color:var(--muted)">上面呢套係「拍攝方案」：腳本＋封面＋文案全部齊，你按拍攝貼士真人出鏡拍就得（呢啲貼士就係教你點拍，唔係自動出片步驟）。</p>
         <p style="font-size:13px;margin:6px 0;color:var(--muted)">想用 AI 直接生成 B-roll 片段（例如後台介面、辦公室、手機操作嘅 5 秒直度短片），可以搵我（agent）幫手 generate——純 frontend 網站本身唔能直接 render 影片。真人對嘴型講嘢嗰種 30 秒片，暫時仲要你親自拍。</p>
+      </div>
+      <div class="proposal-section" style="border-color:#8b5cf6">
+        <h4>🎬 完整剪輯教學 Script（剪映逐秒分鏡 · 跟住做就出片）</h4>
+        <p style="font-size:12px;color:var(--muted);margin:4px 0 8px">比例 9:16 直屏，IG／小紅書／抖音通用。下面內容會跟「${escapeHtml(topic)}」題材自動填好；分鏡時間碼對應上面「分鏡腳本」每格。</p>
+        <h5 style="margin:8px 0 4px">📋 拍攝準備清單</h5>
+        <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="text-align:left;border-bottom:1px solid var(--border)"><th>素材</th><th>點嚟</th><th>備註</th></tr></thead>
+          <tbody>${prepRows}</tbody>
+        </table></div>
+        <h5 style="margin:10px 0 4px">✂️ 剪映操作步驟</h5>
+        <ol style="margin:0;padding-left:18px;font-size:12px">${stepRows}</ol>
+        <h5 style="margin:10px 0 4px">📦 可複製文案庫（大字幕）</h5>
+        <ul style="margin:0;padding-left:18px;font-size:12px">${subRows}</ul>
+        <p style="font-size:12px;color:var(--muted);margin:6px 0">CTA 字幕：<b>${escapeHtml(edit.cta)}</b></p>
+        <h5 style="margin:10px 0 4px">💡 拍攝小貼士</h5>
+        <ul style="margin:0;padding-left:18px;font-size:12px">${editTips}</ul>
+        <p style="font-size:12px;color:var(--muted);margin:8px 0 0">🔧 進階：想加 AI 背景片段（城市／數據流）做轉場？搵 agent 用 VideoGen 生 5 秒直屏片（約 50-100 credits），插去中段就得。</p>
+        <pre id="editScriptRaw" style="display:none">${escapeHtml(editText)}</pre>
+        <button class="btn btn-sm btn-ghost copy-btn" style="margin-top:8px" onclick="copySingleText('editScriptRaw', this)">複製完整教學 Script</button>
       </div>`;
     try {
       Storage.addHistory({ type: 'social', topic, platform: 'video', ratio: '9:16', templateId: 'video-script', templateName: '短視頻腳本', title: s.title, caption: s.caption });
@@ -3905,7 +3969,7 @@
     EXTRA_PLATFORMS,
     renderMarketFocus, drawFlag, drawIcon, drawVictoriaHarbour, drawVignette,
     // 🎬 短視頻工作台測試 hook
-    buildVideoScript, pickHook, buildContentCalendar, renderReelsLayout, VIDEO_HOOKS, WEEK_PLAN,
+    buildVideoScript, buildEditingScript, pickHook, buildContentCalendar, renderReelsLayout, VIDEO_HOOKS, WEEK_PLAN,
     chooseReelsTitle, pickReelsBadge, breakReelsTitle, drawReelsLuxBg
   };
 })();

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Jackson Hui · 專屬圖表</title>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; font-family: "PingFang SC","Microsoft YaHei","Heiti SC",sans-serif;
+      background: #0f172a; color: #e2e8f0; display: flex; flex-direction: column;
+      align-items: center; min-height: 100vh; padding: 16px; }
+    h1 { font-size: 16px; font-weight: 700; margin: 8px 0 4px; color: #facc15; }
+    .sub { font-size: 12px; color: #94a3b8; margin-bottom: 12px; text-align: center; }
+    .stage { width: 100%; max-width: 420px; background: #1e293b; border-radius: 16px;
+      padding: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.4); }
+    canvas { width: 100%; height: auto; border-radius: 10px; display: block; background: #fff; }
+    .btns { display: flex; gap: 10px; width: 100%; max-width: 420px; margin-top: 14px; }
+    button { flex: 1; border: none; border-radius: 12px; padding: 14px; font-size: 15px;
+      font-weight: 700; cursor: pointer; }
+    .dl { background: linear-gradient(90deg,#f59e0b,#facc15); color: #1e293b; }
+    .cp { background: #334155; color: #e2e8f0; }
+    .caption { width: 100%; max-width: 420px; margin-top: 14px; background: #1e293b;
+      border-radius: 12px; padding: 12px; font-size: 13px; line-height: 1.7; white-space: pre-wrap;
+      color: #cbd5e1; display: none; }
+    .err { color: #fca5a5; font-size: 13px; margin-top: 10px; text-align: center; }
+    .logo { font-size: 11px; color: #64748b; margin-top: 18px; }
+  </style>
+</head>
+<body>
+  <h1 id="title">Jackson Hui · 專屬圖表</h1>
+  <div class="sub" id="sub">為你度身訂造嘅理財圖表，撳下面即可保存到相機</div>
+  <div class="stage"><canvas id="cv" width="1080" height="1350"></canvas></div>
+  <div class="btns">
+    <button class="dl" onclick="saveImg()">⬇️ 保存到相機</button>
+    <button class="cp" onclick="copyLink()">🔗 複製連結</button>
+  </div>
+  <div class="caption" id="cap"></div>
+  <div class="err" id="err"></div>
+  <div class="logo">Powered by Agent OS AI · Jackson Hui</div>
+
+  <script src="js/data/templates.js"></script>
+  <script src="js/data/products.js"></script>
+  <script src="js/modules/social.js"></script>
+  <script>
+    function qp(name) { return new URLSearchParams(location.search).get(name); }
+    function dec(s) { try { return decodeURIComponent(s || ''); } catch (e) { return s || ''; } }
+
+    // 預設 infographic 範本（如無提供 tpl id，用呢個）
+    function defaultSalesTpl() {
+      return { bg:{from:'#eff6ff',to:'#dbeafe',dir:'v'}, layout:'infographic',
+        badge:{text:'專屬建議',bg:'#2563eb',color:'#ffffff'},
+        titleColor:'#1e40af', titleWeight:900, subColor:'#3b82f6', bulletColor:'#1d4ed8',
+        footer:{text:'Jackson Hui',color:'#2563eb'}, decor:'none', accent:'#2563eb' };
+    }
+
+    function resolveTpl(id, mode) {
+      // 優先喺 COVER_TEMPLATES 搵（如果載到）
+      if (id && typeof window.COVER_TEMPLATES !== 'undefined') {
+        const found = window.COVER_TEMPLATES.find(t => t.id === id);
+        if (found) return found;
+      }
+      if (mode === 'post') {
+        // post 模式預設用一個大眾化專業範本
+        if (typeof window.COVER_TEMPLATES !== 'undefined') {
+          const fb = window.COVER_TEMPLATES.find(t => t.layout === 'default');
+          if (fb) return fb;
+        }
+        return { bg:{from:'#1e3a8a',to:'#0f172a',dir:'d'}, layout:'default',
+          titleColor:'#ffffff', titleWeight:900, subColor:'#bae6fd', bulletColor:'#e0f2fe',
+          footer:{text:'Jackson Hui',color:'#bae6fd'}, decor:'sparkle', accent:'#38bdf8' };
+      }
+      return defaultSalesTpl();
+    }
+
+    function boot() {
+      const mode = qp('mode') || 'sales';
+      const tplId = qp('tpl');
+      const title = dec(qp('title')) || '你嘅專屬理財建議';
+      const tagline = dec(qp('tagline')) || '';
+      const rawPoints = dec(qp('points')) || '';
+      const points = rawPoints.split('||').map(s => s.trim()).filter(Boolean).slice(0, 3);
+      const w = parseInt(qp('w'), 10) || (mode === 'post' ? 1080 : 1080);
+      const h = parseInt(qp('h'), 10) || (mode === 'post' ? 1080 : 1350);
+      const caption = dec(qp('caption')) || '';
+
+      document.getElementById('title').textContent = (mode === 'post' ? 'Jackson Hui · 社交貼文' : 'Jackson Hui · 專屬圖表');
+
+      const cv = document.getElementById('cv');
+      cv.width = w; cv.height = h;
+      const tpl = resolveTpl(tplId, mode);
+      const data = { title, tagline, points };
+
+      try {
+        if (window.SocialModule && typeof window.SocialModule.renderCover === 'function') {
+          window.SocialModule.renderCover(cv, tpl, data, null);
+        } else {
+          document.getElementById('err').textContent = '⚠️ 載入失敗，請重新整理頁面。';
+        }
+      } catch (e) {
+        document.getElementById('err').textContent = '⚠️ 繪圖失敗：' + e.message;
+      }
+
+      if (caption) {
+        const cap = document.getElementById('cap');
+        cap.style.display = 'block';
+        cap.textContent = caption;
+      }
+    }
+
+    function saveImg() {
+      const cv = document.getElementById('cv');
+      try {
+        const url = cv.toDataURL('image/png');
+        const a = document.createElement('a');
+        a.href = url; a.download = 'jackson-hui-' + Date.now() + '.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      } catch (e) {
+        alert('保存失敗：' + e.message);
+      }
+    }
+    function copyLink() {
+      const link = location.href;
+      if (navigator.share) { navigator.share({ title: 'Jackson Hui 專屬圖表', url: link }).catch(()=>{}); return; }
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(link).then(() => alert('連結已複製')).catch(() => alert('複製失敗'));
+      } else {
+        prompt('複製呢個連結：', link);
+      }
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+    else boot();
+  </script>
+</body>
+</html>

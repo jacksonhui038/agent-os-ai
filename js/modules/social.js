@@ -4232,7 +4232,8 @@
     // 每日市場焦點（金融快訊圖）
     generateMarketFocus, toggleMarketFocusPanel, renderMarketFocusPanel, fetchTodayNews,
     // 🎬 小紅書短視頻工作台
-    generateVideoScript, generateReelsCover, refreshVideoHooks, generateContentCalendar
+    generateVideoScript, generateReelsCover, refreshVideoHooks, generateContentCalendar,
+    renderCover
   };
   // 測試用內部 hook（唔影響一般用戶）
   window.SocialModule.__test = {

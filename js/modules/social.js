@@ -3166,6 +3166,53 @@
     '收音清晰過畫質；講嘢自然啲，唔好逐字讀稿'
   ];
 
+  // 豐富 body 文案庫（每條：大字幕 sub + 完整口播 nar + 畫面 vis）
+  // 按主題 bucket 取，確保每段都係完整句子、夠內容
+  const VIDEO_BODY = {
+    default: [
+      { sub:'最廢係內容', nar:'做保險最廢時間就係內容營銷——日更、寫稿、執圖、排期，一日唔做就斷更，算法即刻收皮', vis:'真人無奈攤手 + 大字幕彈出' },
+      { sub:'入主題就出齊', nar:'呢套 AI 系統入個主題，就幫你出埋封面、大字幕、hashtag，連一週日曆都排好', vis:'切後台操作截圖 demo' },
+      { sub:'實測有客搵', nar:'我實測過，由零粉做起，每日五分鐘跟住做，一個月帳號就開始有客留言搵上門', vis:'真人 + 後台數據截圖特寫' },
+      { sub:'唔使識設計', nar:'唔使識設計、唔使識剪片，手機拍直度 9:16 對住鏡頭講就得，後台截圖一插就似足片中 demo', vis:'手機拍攝 + 截圖插入示意' },
+      { sub:'留言拎模板', nar:'留言「AI」，發你呢套小紅書獲客模板，跟住拍一星期就見到變化', vis:'指向評論區 + 關注引導' }
+    ],
+    xhs: [
+      { sub:'玩法唔同', nar:'想開拓內地客，但小紅書、抖音嘅玩法同香港 IG 完全兩樣，內容調性唔對就零互動', vis:'真人對鏡頭講，背景放內地平台 logo' },
+      { sub:'簡體自動轉', nar:'系統有專屬中文文案庫，自動轉做簡體加內地常用表達，封面大字幕直接對準內地用戶口味', vis:'切後台文案介面截圖' },
+      { sub:'收藏多咗', nar:'有 agent 跟住做，小紅書筆記由每日零互動變到穩定幾十個收藏，名單自然多咗', vis:'真人 + 數據截圖特寫' },
+      { sub:'唔使請人拍', nar:'你只係負責真人出鏡講，其餘執圖、排期、hashtag 全都自動，唔使再請人拍', vis:'手機拍攝示意 + 大字幕' },
+      { sub:'照跟就出片', nar:'留言「模板」，發你小紅書保險獲客內容日曆，照跟就出片', vis:'指向評論區手勢' }
+    ],
+    medical: [
+      { sub:'講到好乾', nar:'危疾、醫療呢啲題目好易講到好乾，客一滑走就冇，點樣講到佢聽得入耳？', vis:'真人思考狀 + 大字幕提問' },
+      { sub:'拆做場景', nar:'系統會將複雜條款拆成生活化場景，例如「一場病，家庭現金流點樣斷」，大字幕搶眼', vis:'切場景插圖 / 白板書寫' },
+      { sub:'停留長咗', nar:'用咗場景化講法，同一個醫療題目，停留時間長咗，仲有客主動問「點買」', vis:'真人 + 互動數據截圖' },
+      { sub:'準備真案例', nar:'你只係要準備好真實個案（匿名），對住鏡頭講，後台計數截圖一插就有說服力', vis:'後台理賠／數字截圖特寫' },
+      { sub:'留言拎保障', nar:'留言「保障」，發你危疾醫療內容包，跟住拍就係專業 IP', vis:'指向評論區 + 關注' }
+    ],
+    savings: [
+      { sub:'最忌硬銷', nar:'儲蓄、理財客最忌「硬銷」，一開口就推計劃書，人即刻走', vis:'真人搖頭 + 大字幕' },
+      { sub:'場景切入', nar:'系統教你用「教育金」「退休」呢類人生場景切入，先建立信任再講產品', vis:'切場景插圖' },
+      { sub:'收藏高三倍', nar:'有 agent 轉咗場景化打法，理財筆記收藏率高三倍，名單質素仲好', vis:'真人 + 數據截圖' },
+      { sub:'真例加截圖', nar:'你只係要講真實例子，後台分紅演示截圖、計算表一插，即刻專業', vis:'後台分紅表截圖特寫' },
+      { sub:'留言理財', nar:'留言「理財」，發你儲蓄理財內容日曆，照跟就出片', vis:'指向評論區手勢' }
+    ],
+    client: [
+      { sub:'名單洗完', nar:'名單洗完就冇，cold call 冇人性，點樣令客主動搵上門？', vis:'真人攤手 + 大字幕提問' },
+      { sub:'做價值內容', nar:'系統幫你做「價值內容」，令潛在客睇完覺得你有料，主動留言問', vis:'切內容範例截圖' },
+      { sub:'主動查詢多', nar:'跟住做，一個月多咗成幾十個主動查詢，唔使再追住人問', vis:'真人 + 查詢截圖' },
+      { sub:'持續出片', nar:'你只係要持續出片，系統排好日曆，你跟拍就得', vis:'手機拍攝 + 日曆截圖' },
+      { sub:'留言獲客', nar:'留言「獲客」，發你客戶開發玩法，跟住做就有名單', vis:'指向評論區 + 關注' }
+    ],
+    ai: [
+      { sub:'九成可自動', nar:'聽到 AI 就覺得好難，其實你每日嘅內容功夫，九成可以自動', vis:'真人思考 + 大字幕' },
+      { sub:'一次過出齊', nar:'入個主題，封面、文案、大字幕、hashtag、日曆一次過出，唔使逐樣做', vis:'切後台一次生成截圖' },
+      { sub:'由成個鐘到5分', nar:'我親測，以前成個鐘做一 post，家陣五分鐘出足一週', vis:'真人 + 計時對比' },
+      { sub:'唔使識 code', nar:'唔使識 code，介面就係填主題撳制，任何人做到', vis:'手機操作示意' },
+      { sub:'留言 AI', nar:'留言「AI」，發你玩法教學，跟住拍就係內容機器', vis:'指向評論區手勢' }
+    ]
+  };
+
   // 核心：由主題砌一段短視頻腳本（口播＋大字幕＋分鏡＋caption）
   function buildVideoScript(topic, opts) {
     opts = opts || {};
@@ -3176,9 +3223,10 @@
     const total = parseInt(durKey, 10);
     const rich = getRichContent(topic, style, persona, 'xhs', new Set());
     const hook = pickHook(topic, opts.hookStyle || '');
-    const entries = (rich.entries || []).slice(0, dur.pts);
-    const bodyTotal = Math.max(3, total - dur.hook - dur.cta);
-    const per = Math.max(3, Math.round(bodyTotal / Math.max(1, entries.length)));
+    const bucket = topicBucket(topic);
+    let body = (VIDEO_BODY[bucket] || VIDEO_BODY.default).slice(0, dur.pts);
+    let pad = 0;
+    while (body.length < dur.pts) { body.push(VIDEO_BODY.default[pad % VIDEO_BODY.default.length]); pad++; }
 
     const segments = [];
     segments.push({
@@ -3187,41 +3235,46 @@
       visual: '真人出鏡對住鏡頭講，表情要有戲；大字幕彈出'
     });
     let t = dur.hook;
-    entries.forEach((e, i) => {
-      const last = i === entries.length - 1;
+    const bodyTotal = Math.max(2, total - dur.hook - dur.cta);
+    const per = Math.max(3, Math.round(bodyTotal / Math.max(1, body.length)));
+    body.forEach((b, i) => {
+      const last = i === body.length - 1;
       const end = last ? (total - dur.cta) : Math.min(total - dur.cta, t + per);
       segments.push({
         time: vsRange(t, end), role: '重點 ' + (i + 1),
-        subtitle: vsShorten(e.t, 12),
-        narration: e.t + (e.d ? '，' + e.d : ''),
-        visual: (i % 2) ? '切後台／工具截圖 或 手寫重點特寫' : '真人口播 + 大字幕逐點彈出'
+        subtitle: b.sub, narration: b.nar, visual: b.vis
       });
       t = end;
     });
-    const cta = rich.cta || (personaProfile.enabled && personaProfile.cta) || '有興趣留言我發你詳情';
+    const ctaBase = (personaProfile.enabled && personaProfile.cta) || rich.cta || '有興趣留言我發你詳情';
+    const ctaNar = ctaBase + '。記得 follow 我，跟埋落嚟，一星期你就會見到自己個帳號有變化。收藏呢條片，下次拍可以直接跟住做。';
     segments.push({
       time: vsRange(total - dur.cta, total), role: '結尾 CTA',
-      subtitle: '留言 👉 即刻拎', narration: cta + '，記得 follow 睇多啲乾貨',
+      subtitle: '留言 👉 拎模板', narration: ctaNar,
       visual: '真人 + 指向評論區手勢；出「關注／收藏」引導'
     });
+
+    const fullScript = ['【開場】' + hook.text]
+      .concat(body.map((b, i) => '【重點 ' + (i + 1) + '】' + b.nar))
+      .concat(['【結尾】' + ctaNar]).join('\n\n');
 
     return {
       title: vsShorten(hook.text, 16),
       hookCat: hook.cat, hookText: hook.text,
-      duration: durKey, segments,
-      caption: buildVideoCaption(topic, hook.text, entries, cta),
+      duration: durKey, segments, fullScript,
+      caption: buildVideoCaption(topic, hook.text, body, ctaBase),
       hashtags: suggestTags(topic, 'xhs') + ' #保險科普 #小紅書乾貨',
       tips: VIDEO_TIPS
     };
   }
 
-  function buildVideoCaption(topic, hook, entries, cta) {
-    let body = hook + '\n\n';
-    (entries || []).forEach((e, i) => { body += (i + 1) + '️⃣ ' + e.t + (e.d ? '｜' + e.d : '') + '\n'; });
-    body += '\n' + cta;
+  function buildVideoCaption(topic, hook, body, cta) {
+    let b = hook + '\n\n';
+    (body || []).forEach((e, i) => { b += (i + 1) + '️⃣ ' + e.nar + '\n'; });
+    b += '\n' + cta;
     const sig = personaSignature();
-    if (sig) body += '\n\n' + sig;
-    return body;
+    if (sig) b += '\n\n' + sig;
+    return b;
   }
 
   function renderVideoPanel() {
@@ -3291,7 +3344,12 @@
           <tbody>${rows}</tbody>
         </table></div>
         <pre id="videoScriptRaw" style="display:none">${escapeHtml(scriptText)}</pre>
-        <button class="btn btn-sm btn-ghost copy-btn" style="margin-top:8px" onclick="copySingleText('videoScriptRaw', this)">複製腳本</button>
+        <button class="btn btn-sm btn-ghost copy-btn" style="margin-top:8px" onclick="copySingleText('videoScriptRaw', this)">複製分鏡腳本</button>
+      </div>
+      <div class="proposal-section" style="border-color:#f59e0b">
+        <h4>🗣️ 完整口播稿（直接讀，照時間軸講）</h4>
+        <pre class="output-content" id="videoFull">${escapeHtml(s.fullScript)}</pre>
+        <button class="btn btn-sm btn-ghost copy-btn" onclick="copySingleText('videoFull', this)">複製口播稿</button>
       </div>
       <div class="proposal-section" style="border-color:#6366f1">
         <h4>✍️ 配套小紅書文案</h4>
@@ -3301,6 +3359,11 @@
       <div class="proposal-section" style="border-color:#10b981">
         <h4>🎥 拍攝貼士</h4>
         <ul style="margin:0;padding-left:18px">${s.tips.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ul>
+      </div>
+      <div class="proposal-section" style="border-color:#64748b">
+        <h4>🤖 點樣出到條片？（真人拍 vs AI 生成）</h4>
+        <p style="font-size:13px;margin:6px 0;color:var(--muted)">上面呢套係「拍攝方案」：腳本＋封面＋文案全部齊，你按拍攝貼士真人出鏡拍就得（呢啲貼士就係教你點拍，唔係自動出片步驟）。</p>
+        <p style="font-size:13px;margin:6px 0;color:var(--muted)">想用 AI 直接生成 B-roll 片段（例如後台介面、辦公室、手機操作嘅 5 秒直度短片），可以搵我（agent）幫手 generate——純 frontend 網站本身唔能直接 render 影片。真人對嘴型講嘢嗰種 30 秒片，暫時仲要你親自拍。</p>
       </div>`;
     try {
       Storage.addHistory({ type: 'social', topic, platform: 'video', ratio: '9:16', templateId: 'video-script', templateName: '短視頻腳本', title: s.title, caption: s.caption });

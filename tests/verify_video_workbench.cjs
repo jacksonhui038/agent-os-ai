@@ -69,6 +69,10 @@ ok(s30.segments[0].role === '開場鉤子' && s30.segments[s30.segments.length -
 ok(s30.segments.every(seg => seg.time && seg.subtitle && seg.narration && seg.visual), '每段都有 時間/大字幕/口播/畫面');
 ok(typeof s30.caption === 'string' && s30.caption.length > 0 && /#/.test(s30.hashtags), '有配套 caption + hashtags');
 ok(Array.isArray(s30.tips) && s30.tips.length >= 5, '有拍攝貼士（' + s30.tips.length + ' 條）');
+// 內容豐富度：完整口播稿存在，且每段口播都係完整句子（唔係得幾隻字）
+ok(typeof s30.fullScript === 'string' && s30.fullScript.length >= 150, '有完整口播稿（' + s30.fullScript.length + ' 字，夠讀）');
+ok(s30.segments.filter(seg => seg.role.indexOf('開場') < 0 && seg.role.indexOf('CTA') < 0)
+  .every(seg => seg.narration.length >= 20), '每個重點口播都係完整句子（≥20 字）');
 const s15 = T.buildVideoScript('危疾保障常見誤解', { duration: '15' });
 const s60 = T.buildVideoScript('危疾保障常見誤解', { duration: '60' });
 ok(s60.segments.length >= s30.segments.length && s30.segments.length >= s15.segments.length, '片長越長段數越多（15≤30≤60）');

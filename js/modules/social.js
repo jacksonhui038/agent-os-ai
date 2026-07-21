@@ -1651,6 +1651,7 @@
 
       renderCover(canvas, tpl, { title: topic, tagline: built.hook, points: built.keyPoints }, bgImage);
       state.last = { title: topic, tagline: built.hook, points: built.keyPoints, ratio };
+      state.lastTpl = tpl;
     }
 
     const entry = {
@@ -1757,10 +1758,13 @@
 
     // 共用大字（標題 / 副標題 / 重點）畫圖；caption 按平台分開
     const built = buildContent(topic, 'fb', '1:1', style, persona, extra, state.type, null, tpl);
-    const data = { title: topic, tagline: built.hook, points: built.keyPoints };
+    // 簡中模式連圖上大字都轉簡
+    const data = isCN()
+      ? { title: toSimplified(topic), tagline: toSimplified(built.hook), points: built.keyPoints.map(toSimplified) }
+      : { title: topic, tagline: built.hook, points: built.keyPoints };
     const captions = {};
     MULTI_PLATFORMS.forEach(p => { captions[p.key] = buildPlatformCaption(topic, p.key, style, persona, extra, audience); });
-    lastMulti = { topic, style, persona, extra, audience };
+    lastMulti = { topic, style, persona, extra, audience, tpl };
     // A：人設定位 —— 所有平台 caption 加上你嘅專業簽名
     const sig = personaSignature();
     if (sig) MULTI_PLATFORMS.forEach(p => { captions[p.key] += '\n\n' + sig; });
@@ -1933,7 +1937,15 @@
     recs.slice(0, 4).forEach((r, i) => {
       items.push({ title: r, tagline: '推薦方案 ' + (i + 1), points: salesPointsFor(r, client) });
     });
-    const deck = items.slice(0, 5);
+    let deck = items.slice(0, 5);
+    // 簡中模式：銷售圖上嘅大字同 share 文案都轉簡
+    if (isCN()) {
+      deck = deck.map(it => ({
+        title: toSimplified(it.title),
+        tagline: toSimplified(it.tagline),
+        points: it.points.map(toSimplified)
+      }));
+    }
     const tpl = (typeof COVER_TEMPLATES !== 'undefined' ? COVER_TEMPLATES : []).find(t => t.layout === 'infographic') || COVER_TEMPLATES[0];
 
     const out = document.getElementById('socialOutput');
@@ -1982,7 +1994,8 @@
   }
   function shareAllSalesDeck() {
     if (!lastSalesDeck) return;
-    const text = lastSalesDeck.map((it, i) => '【銷售圖 ' + (i + 1) + '】' + it.title + '\n' + it.points.join('\n')).join('\n\n');
+    let text = lastSalesDeck.map((it, i) => '【銷售圖 ' + (i + 1) + '】' + it.title + '\n' + it.points.join('\n')).join('\n\n');
+    if (isCN()) text = toSimplified(text);
     shareWhatsApp(text);
   }
 
@@ -2082,24 +2095,71 @@
     for (const ch of out) r += (SIMP_CHARS[ch] || ch);
     return r;
   }
+  function isCN() {
+    const el = document.getElementById('langToggle');
+    return el && el.classList.contains('cn-mode');
+  }
 
-  // 語言切換：HK 繁中 ⇄ 內地簡中（影響多平台 caption，即時重渲染）
+  // 語言切換：HK 繁中 ⇄ 內地簡中（影響圖上大字 + 全平台文案，即時重渲染）
   function toggleLang() {
     const el = document.getElementById('langToggle');
     if (!el) return;
     const cn = el.classList.toggle('cn-mode');
     el.textContent = cn ? '🌐 語言：內地簡中' : '🌐 語言：HK 繁中';
-    // 已有多平台輸出時，即時重 build 各平台 caption（唔重畫 canvas）
-    const capEl = document.getElementById('mpCap_ig');
-    if (capEl && lastMulti) {
+
+    // 1) 一鍵 5 平台：重畫 canvas + 重 build caption
+    if (lastMulti && document.getElementById('mpCap_ig')) {
       const sig = personaSignature();
       MULTI_PLATFORMS.forEach(p => {
         const t = document.getElementById('mpCap_' + p.key);
-        if (!t) return;
-        let txt = buildPlatformCaption(lastMulti.topic, p.key, lastMulti.style, lastMulti.persona, lastMulti.extra, lastMulti.audience);
-        if (sig) txt += '\n\n' + sig;
-        t.textContent = txt;
+        if (t) {
+          let txt = buildPlatformCaption(lastMulti.topic, p.key, lastMulti.style, lastMulti.persona, lastMulti.extra, lastMulti.audience);
+          if (sig) txt += '\n\n' + sig;
+          t.textContent = txt;
+        }
+        const cv = document.getElementById('mpCanvas_' + p.key);
+        if (cv) {
+          const built = buildContent(lastMulti.topic, 'fb', '1:1', lastMulti.style, lastMulti.persona, lastMulti.extra, state.type, null, lastMulti.tpl);
+          const d = isCN()
+            ? { title: toSimplified(lastMulti.topic), tagline: toSimplified(built.hook), points: built.keyPoints.map(toSimplified) }
+            : { title: lastMulti.topic, tagline: built.hook, points: built.keyPoints };
+          try { renderCover(cv, lastMulti.tpl, d, null); } catch (e) { console.warn(e); }
+        }
       });
+    }
+
+    // 2) 單一社交封面（一鍵生成文案+圖片）
+    const sc = document.getElementById('socialCanvas');
+    if (sc && state.last && state.lastTpl) {
+      const d = isCN()
+        ? { title: toSimplified(state.last.title), tagline: toSimplified(state.last.tagline), points: state.last.points.map(toSimplified) }
+        : { title: state.last.title, tagline: state.last.tagline, points: state.last.points };
+      try { renderCover(sc, state.lastTpl, d, null); } catch (e) { console.warn(e); }
+    }
+
+    // 3) 銷售圖
+    if (lastSalesDeck && document.getElementById('sdCanvas_0')) {
+      const tpl = (typeof COVER_TEMPLATES !== 'undefined' ? COVER_TEMPLATES : []).find(t => t.layout === 'infographic') || COVER_TEMPLATES[0];
+      lastSalesDeck.forEach((it, i) => {
+        const cv = document.getElementById('sdCanvas_' + i);
+        if (!cv) return;
+        const d = isCN()
+          ? { title: toSimplified(it.title), tagline: toSimplified(it.tagline), points: it.points.map(toSimplified) }
+          : { title: it.title, tagline: it.tagline, points: it.points };
+        try { renderCover(cv, tpl, d); } catch (e) { console.warn(e); }
+      });
+    }
+
+    // 4) 更多平台文案
+    const exOut = document.getElementById('mpExtraOut');
+    if (exOut && exOut.innerHTML.trim()) {
+      const topic = (document.getElementById('socialTopic') ? document.getElementById('socialTopic').value : '').trim();
+      if (topic) appendExtraPlatforms(topic);
+    }
+
+    // 5) 每日市場焦點
+    if (document.getElementById('mfCanvas')) {
+      generateMarketFocus();
     }
   }
 
@@ -2117,19 +2177,32 @@
     // 根據範本 layout 調整要點格式（對比表要 Expectation|Reality）
     keyPoints = adaptPointsForLayout(keyPoints, tpl, topic);
 
+    // 內地簡中：圖上大字同 caption 一併轉簡
+    if (isCN()) {
+      hook = toSimplified(hook);
+      keyPoints = keyPoints.map(toSimplified);
+      caption = toSimplified(caption);
+    }
+
     let xhsBlock = '';
     if (platform === 'xhs-hk' || platform === 'xhs-cn') {
       const xhs = TEMPLATES.xiaohongshuTemplates.medical;
-      const isCN = platform === 'xhs-cn';
+      const isCNPlatform = platform === 'xhs-cn';
+      // 若語言掣係簡中，連小紅書範本都轉簡
+      const xhsTitle = isCN() ? toSimplified(xhs.title) : xhs.title;
+      const xhsSubtitle = isCN() ? toSimplified(xhs.subtitle) : xhs.subtitle;
+      const xhsBody = isCN() ? toSimplified(xhs.body) : xhs.body;
+      const xhsCta = isCN() ? toSimplified(xhs.commentCta) : xhs.commentCta;
+      const xhsTags = isCN() ? toSimplified(xhs.hashtags) : xhs.hashtags;
       xhsBlock = `
       <div class="proposal-section" style="border-color:#ec4899">
-        <h4>📕 小紅書專屬格式（${isCN ? '內地版' : 'HK版'}）</h4>
+        <h4>📕 小紅書專屬格式（${isCNPlatform ? '內地版' : 'HK版'}）</h4>
         <p>
-          <strong>封面標題：</strong>${escapeHtml(xhs.title)}<br>
-          <strong>副標題：</strong>${escapeHtml(xhs.subtitle)}<br><br>
-          <strong>正文：</strong><br>${escapeHtml(xhs.body).replace(/\n/g, '<br>')}<br><br>
-          <strong>留言關鍵字 CTA：</strong>${escapeHtml(xhs.commentCta)}<br>
-          <strong>Hashtags：</strong>${escapeHtml(xhs.hashtags)}
+          <strong>封面標題：</strong>${escapeHtml(xhsTitle)}<br>
+          <strong>副標題：</strong>${escapeHtml(xhsSubtitle)}<br><br>
+          <strong>正文：</strong><br>${escapeHtml(xhsBody).replace(/\n/g, '<br>')}<br><br>
+          <strong>留言關鍵字 CTA：</strong>${escapeHtml(xhsCta)}<br>
+          <strong>Hashtags：</strong>${escapeHtml(xhsTags)}
         </p>
       </div>`;
     }
@@ -3337,7 +3410,7 @@
       body = `${hook}\n\n${points.map(p => `• ${p}`).join('\n')}\n\n身為香港保險從業員，我相信專業規劃能為家庭帶來長遠保障。${cta}\n\n${tags}`;
     }
     if (sig) body += '\n\n' + sig;
-    return body;
+    return isCN() ? toSimplified(body) : body;
   }
 
   function appendExtraPlatforms(topic) {
@@ -4197,7 +4270,21 @@
     if (!items.length) { alert('請填至少一條市場新聞'); return; }
     const tpl = (typeof COVER_TEMPLATES !== 'undefined' ? COVER_TEMPLATES : []).find(t => t.id === (lux ? 'market-focus-lux' : 'market-focus'));
     if (!tpl) { alert('搵唔到 market_focus 範本'); return; }
-    const data = { title: '每日市場焦點', date, agent, tagline, cta, items };
+    let data = { title: '每日市場焦點', date, agent, tagline, cta, items };
+    if (isCN()) {
+      data = {
+        title: toSimplified('每日市場焦點'),
+        date,
+        agent,
+        tagline: toSimplified(tagline),
+        cta: toSimplified(cta),
+        items: items.map(it => ({
+          ...it,
+          title: toSimplified(it.title),
+          subtitle: toSimplified(it.subtitle)
+        }))
+      };
+    }
     const out = document.getElementById('socialOutput');
     out.className = 'output-box filled';
     const ratio = '4:5';

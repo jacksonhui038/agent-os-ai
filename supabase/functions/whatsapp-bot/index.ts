@@ -2,6 +2,9 @@
 // 收 WhatsApp message → 分類意圖（客戶查詢 / 指令）→ AI 分析 → 回文字 + 個人化圖表連結
 // 部署：supabase functions deploy whatsapp-bot
 // Secrets：WHATSAPP_VERIFY_TOKEN / WHATSAPP_TOKEN / WHATSAPP_PHONE_ID / RENDER_BASE_URL / LLM_API_KEY / LLM_BASE_URL / LLM_MODEL
+//          RENDER_SERVICE_URL（Phase 2 可選：HTML→image 服務，令 bot 直接 send PNG 唔使 send link）
+
+// Phase 2：設咗 RENDER_SERVICE_URL 就直接 send 圖；冇設就 fallback 返 send link（同之前一樣）
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -11,6 +14,8 @@ const PHONE_ID = Deno.env.get("WHATSAPP_PHONE_ID") || "";
 const BASE_URL =
   Deno.env.get("RENDER_BASE_URL") ||
   "https://jacksonhui038.github.io/agent-os-ai/render.html";
+// Phase 2：HTML→image 服務（例如自架 Puppeteer / 託管 API）。設咗就直接 send 圖。
+const RENDER_SERVICE_URL = Deno.env.get("RENDER_SERVICE_URL") || "";
 const LLM_KEY = Deno.env.get("LLM_API_KEY") || "";
 const LLM_BASE = Deno.env.get("LLM_BASE_URL") || "https://api.siliconflow.cn/v1";
 const LLM_MODEL = Deno.env.get("LLM_MODEL") || "deepseek-ai/DeepSeek-V3";
@@ -131,8 +136,8 @@ function fallback(userText: string): BotReply {
   };
 }
 
-function buildReply(userText: string, r: BotReply): string {
-  const link = encodeLink({
+function buildLink(r: BotReply): string {
+  return encodeLink({
     mode: r.intent === "command" ? "post" : "sales",
     tpl: r.intent === "command" ? "default" : "info-blue",
     title: r.title,
@@ -140,6 +145,10 @@ function buildReply(userText: string, r: BotReply): string {
     points: r.points.join("||"),
     caption: r.caption,
   });
+}
+
+function buildReply(r: BotReply): string {
+  const link = buildLink(r);
   return `${r.replyText}\n\n📊 專屬圖表（撳入去 save）：\n${link}`;
 }
 
@@ -175,6 +184,82 @@ async function sendWhatsApp(to: string, text: string): Promise<void> {
   }
 }
 
+// ---- Phase 2：直接 send 圖（經 HTML→image 服務） ----
+async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) {
+      console.error("render service fail:", r.status);
+      return null;
+    }
+    const buf = await r.arrayBuffer();
+    return new Uint8Array(buf);
+  } catch (e) {
+    console.error("fetch image error:", e);
+    return null;
+  }
+}
+
+// 上傳 bytes 去 WhatsApp 拎 media id
+async function uploadWhatsAppMedia(
+  bytes: Uint8Array,
+  mime: string,
+): Promise<string | null> {
+  try {
+    const form = new FormData();
+    form.append("messaging_product", "whatsapp");
+    form.append("file", new Blob([bytes], { type: mime }), "cover.png");
+    const r = await fetch(
+      `https://graph.facebook.com/v19.0/${PHONE_ID}/media`,
+      {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${WHATSAPP_TOKEN}` },
+        body: form,
+      },
+    );
+    if (!r.ok) {
+      console.error("media upload fail:", r.status, await r.text());
+      return null;
+    }
+    const j = await r.json();
+    return j.id || null;
+  } catch (e) {
+    console.error("media upload error:", e);
+    return null;
+  }
+}
+
+async function sendWhatsAppImage(
+  to: string,
+  mediaId: string,
+  caption: string,
+): Promise<void> {
+  try {
+    const r = await fetch(
+      `https://graph.facebook.com/v19.0/${PHONE_ID}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${WHATSAPP_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to,
+          type: "image",
+          image: { id: mediaId, caption: caption.slice(0, 1024) },
+        }),
+      },
+    );
+    if (!r.ok) {
+      const err = await r.text();
+      console.error("WhatsApp image send fail:", r.status, err);
+    }
+  } catch (e) {
+    console.error("WhatsApp image send error:", e);
+  }
+}
+
 // ---- 主處理 ----
 serve(async (req: Request) => {
   const url = new URL(req.url);
@@ -201,7 +286,23 @@ serve(async (req: Request) => {
       const text = m.text?.body || "";
       if (!from) continue;
       const ai = (await callLLM(text)) || fallback(text);
-      const reply = buildReply(text, ai);
+      const link = buildLink(ai);
+
+      // Phase 2：設咗 RENDER_SERVICE_URL 就直接 send 圖；失敗自動 fallback 返 send link
+      if (RENDER_SERVICE_URL) {
+        const imgUrl = `${RENDER_SERVICE_URL}?url=${encodeURIComponent(link)}`;
+        const bytes = await fetchImageBytes(imgUrl);
+        if (bytes) {
+          const mediaId = await uploadWhatsAppMedia(bytes, "image/png");
+          if (mediaId) {
+            await sendWhatsAppImage(from, mediaId, ai.replyText);
+            continue;
+          }
+        }
+        console.warn("Phase 2 出圖失敗，fallback 返 send link");
+      }
+
+      const reply = buildReply(ai);
       await sendWhatsApp(from, reply);
     }
     return new Response("ok", { status: 200 });

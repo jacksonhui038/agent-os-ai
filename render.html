@@ -93,6 +93,7 @@
       try {
         if (window.SocialModule && typeof window.SocialModule.renderCover === 'function') {
           window.SocialModule.renderCover(cv, tpl, data, null);
+          window.__coverReady = true;
         } else {
           document.getElementById('err').textContent = '⚠️ 載入失敗，請重新整理頁面。';
         }

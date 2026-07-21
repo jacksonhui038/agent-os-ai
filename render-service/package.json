@@ -1,0 +1,13 @@
+{
+  "name": "agent-os-render-service",
+  "version": "1.0.0",
+  "description": "HTML→image 服務：將 Agent OS AI render.html 轉 PNG（WhatsApp Bot Phase 2）",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "puppeteer": "^22.15.0"
+  }
+}

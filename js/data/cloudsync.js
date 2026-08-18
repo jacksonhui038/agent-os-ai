@@ -14,11 +14,12 @@ const CloudSync = {
   },
 
   // fetch 包 AbortController timeout：Supabase 連唔到時 8s 內 reject，唔會永遠 hang
+  // 注意：呢度必須 call 全局 fetch，唔可以 call this._fetch（否則無限遞歸 → RangeError）
   async _fetch(url, opts = {}) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 8000);
     try {
-      return await this._fetch(url, Object.assign({ signal: ctrl.signal }, opts));
+      return await fetch(url, Object.assign({ signal: ctrl.signal }, opts));
     } finally {
       clearTimeout(timer);
     }

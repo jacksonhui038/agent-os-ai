@@ -158,3 +158,32 @@
 .set-embed .set-switch input:checked + .set-switch-slider::before { transform: translateX(18px); }
 .set-embed .set-toast { position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%) translateY(10px); background: var(--navy); color: #fff; font-size: 12px; padding: 8px 14px; border-radius: 999px; box-shadow: 0 8px 24px rgba(20,33,61,.3); opacity: 0; pointer-events: none; transition: .25s; z-index: 40; max-width: 90%; text-align: center; }
 .set-embed .set-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ===== Responsive (max-width:900px) — 窄屏 SET page 全屏顯示 =====
+ * 問題：desktop 嘅 .set-embed 用 height: calc(100vh - var(--header-h) - 56px) 假設 header 60px。
+ *       窄屏 header 標題（如「SET 智能體」）會 wrap 兩行，實際 header >60px → set-embed 高度 > 可用空間
+ *       → 內容推到 fold 下/被 clip → 整個 discover view 睇落空白。
+ * 修法：窄屏改 height:auto + min-height 用 viewport（緩衝 header wrap），phone-frame 去圓角去陰影全寬。 */
+@media (max-width: 900px) {
+  .set-embed {
+    height: auto;
+    min-height: calc(100vh - var(--header-h) - 20px);
+    align-items: stretch;
+  }
+  .set-embed .set-phone-frame {
+    max-width: 100%;
+    width: 100%;
+    height: auto;
+    min-height: inherit;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .set-embed #setDiscover {
+    height: auto;
+    min-height: inherit;
+  }
+  .set-embed .agent-list {
+    flex: 1 1 auto;
+    min-height: 240px;  /* 確保 agent-list / hero / card 喺窄屏一定有高度可見 */
+  }
+}

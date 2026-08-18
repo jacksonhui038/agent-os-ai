@@ -165,6 +165,16 @@
  * 第二版 nuclear：用 !important 強制覆蓋 inline，加大 min-height 保證可見，overflow:visible 防 clip。
  * 確保 dashboard 正常 render 嘅同時，SET page 喺窄屏顯示 navy hero + SET全能顧問 卡。 */
 @media (max-width: 900px) {
+  /* 真·根治（第三輪）：#page-set 喺 main（display:flex）入面 width=0，
+     因為 main 唔 stretch 而且 .set-embed 冇 intrinsic width，整條 chain 塌成 0。
+     強制 #page-set.active 取 full width + flex basis 100%，先可以向下傳 width。 */
+  #page-set.active {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    flex: 1 1 100% !important;
+  }
   .set-embed {
     height: auto !important;
     min-height: calc(100vh - var(--header-h) - 16px) !important;

@@ -289,12 +289,17 @@ function initApp() {
     if (w) w.style.display = 'block';
   }
 
-  SocialModule?.init?.();
-  ClientModule?.init?.();
-  MeetingModule?.init?.();
-  FollowUpModule?.init?.();
-  ProposalModule?.init?.();
-  SetModule?.init?.();
+  // 每個 module 獨立 init，用 try/catch 包住，避免其中一個掟 error 卡死後面所有 module
+  const safeInit = (name, mod) => {
+    try { mod?.init?.(); }
+    catch (e) { console.error('[' + name + '] init 失敗（唔影響其他功能）:', e); }
+  };
+  safeInit('SocialModule', SocialModule);
+  safeInit('ClientModule', ClientModule);
+  safeInit('MeetingModule', MeetingModule);
+  safeInit('FollowUpModule', FollowUpModule);
+  safeInit('ProposalModule', ProposalModule);
+  safeInit('SetModule', SetModule);
 
   // Set button original texts for copy feedback
   document.querySelectorAll('[data-orig]').forEach(b => b.dataset.orig = b.textContent);
@@ -421,10 +426,13 @@ function boot() {
     showAuth();
   } else {
     showApp();
+    // 即時初始化 UI（local-first），唔等雲端 sync；
+    // 否則 Supabase 連唔到時 pullAll 個 promise 永遠唔 settle，initApp 永遠唔行，成個 app 空白
+    if (!_appStarted) initApp();
     if (APP_CONFIG.cloudEnabled && Auth.isLoggedIn) {
-      CloudSync.pullAll().finally(() => { if (!_appStarted) initApp(); });
-    } else {
-      if (!_appStarted) initApp();
+      CloudSync.pullAll()
+        .then(() => { try { updateDashboardStats(); } catch (e) {} })
+        .catch(e => console.warn('CloudSync.pullAll 背景同步失敗（唔影響 UI）:', e));
     }
   }
 }

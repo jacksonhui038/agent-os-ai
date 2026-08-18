@@ -13,6 +13,17 @@ const CloudSync = {
     };
   },
 
+  // fetch 包 AbortController timeout：Supabase 連唔到時 8s 內 reject，唔會永遠 hang
+  async _fetch(url, opts = {}) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      return await this._fetch(url, Object.assign({ signal: ctrl.signal }, opts));
+    } finally {
+      clearTimeout(timer);
+    }
+  },
+
   // 確保 access token 仲未過期（過期前 5 分鐘自動續期）
   async _ensureToken() {
     if (!this._ready()) return;
@@ -60,7 +71,7 @@ const CloudSync = {
     if (!this._ready()) return false;
     await this._ensureToken();
     try {
-      const res = await fetch(`${this._base()}/rest/v1/user_settings?id=eq.${encodeURIComponent(Auth.currentUser.id)}&select=*`, {
+      const res = await this._fetch(`${this._base()}/rest/v1/user_settings?id=eq.${encodeURIComponent(Auth.currentUser.id)}&select=*`, {
         headers: this._restHeaders()
       });
       if (!res.ok) throw new Error('GET user_settings HTTP ' + res.status);
@@ -91,7 +102,7 @@ const CloudSync = {
   // 取得全組共享的 team_posts（所有 authenticated user 可讀）
   async _getTeamPosts() {
     await this._ensureToken();
-    const res = await fetch(`${this._base()}/rest/v1/team_posts?select=*`, {
+    const res = await this._fetch(`${this._base()}/rest/v1/team_posts?select=*`, {
       headers: this._restHeaders()
     });
     if (!res.ok) throw new Error('GET team_posts HTTP ' + res.status);
@@ -100,7 +111,7 @@ const CloudSync = {
 
   async _get(table, uid) {
     await this._ensureToken();
-    const res = await fetch(`${this._base()}/rest/v1/${table}?owner=eq.${encodeURIComponent(uid)}&select=*`, {
+    const res = await this._fetch(`${this._base()}/rest/v1/${table}?owner=eq.${encodeURIComponent(uid)}&select=*`, {
       headers: this._restHeaders()
     });
     if (!res.ok) throw new Error('GET ' + table + ' HTTP ' + res.status);
@@ -147,7 +158,7 @@ const CloudSync = {
 
   async _upsert(table, row) {
     await this._ensureToken();
-    const res = await fetch(`${this._base()}/rest/v1/${table}`, {
+    const res = await this._fetch(`${this._base()}/rest/v1/${table}`, {
       method: 'POST',
       headers: Object.assign(this._restHeaders(), { 'Prefer': 'resolution=merge-duplicates' }),
       body: JSON.stringify([row])
@@ -156,7 +167,7 @@ const CloudSync = {
   },
   async _insert(table, row) {
     await this._ensureToken();
-    const res = await fetch(`${this._base()}/rest/v1/${table}`, {
+    const res = await this._fetch(`${this._base()}/rest/v1/${table}`, {
       method: 'POST',
       headers: Object.assign(this._restHeaders(), { 'Prefer': 'return=minimal' }),
       body: JSON.stringify([row])
@@ -165,7 +176,7 @@ const CloudSync = {
   },
   async _delete(table, id) {
     await this._ensureToken();
-    const res = await fetch(`${this._base()}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {
+    const res = await this._fetch(`${this._base()}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: this._restHeaders()
     });
@@ -174,7 +185,7 @@ const CloudSync = {
   async _deleteAll(table) {
     await this._ensureToken();
     const uid = Auth.currentUser.id;
-    const res = await fetch(`${this._base()}/rest/v1/${table}?owner=eq.${encodeURIComponent(uid)}`, {
+    const res = await this._fetch(`${this._base()}/rest/v1/${table}?owner=eq.${encodeURIComponent(uid)}`, {
       method: 'DELETE',
       headers: this._restHeaders()
     });

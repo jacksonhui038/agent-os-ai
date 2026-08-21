@@ -1,0 +1,5 @@
+{
+  "v": "v20260821",
+  "ts": 1787322517784,
+  "note": "current build version — 部署時由 bump_version.cjs 自動更新"
+}

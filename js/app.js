@@ -422,6 +422,8 @@ async function authSignOut() {
 }
 function boot() {
   Auth.init();
+  // 啟動自動更新檢測（無論登入與否都跑，因為 banner 喺 body 頂層，唔影響 auth 頁）
+  try { window.UpdatePrompt?.init?.(); } catch (e) { console.warn('UpdatePrompt init 失敗（唔影響主功能）:', e); }
   if (APP_CONFIG.cloudEnabled && !Auth.isLoggedIn) {
     showAuth();
   } else {
